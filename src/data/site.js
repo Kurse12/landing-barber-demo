@@ -49,7 +49,6 @@ export const business = {
   */
   claim: {
     poster: ['Cortes', 'de toda', 'la vida'],
-    tail: 'con las manos de siempre',
   },
   // Dos formas del mismo número, porque cada destino la pide distinta:
   phone: '11 2222 3333', // como se muestra en pantalla

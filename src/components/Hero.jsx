@@ -68,72 +68,68 @@ export default function Hero() {
       className="flex min-h-[100dvh] flex-col justify-between overflow-hidden pt-14 md:pt-[61px]"
     >
       {/*
-        El margen vive en el contenedor de afuera y el <h1> medido no tiene
-        ninguno: `clientWidth` incluye el padding, así que si midiéramos un
-        elemento con `px-4` las líneas saldrían 32px más anchas de lo que cabe
-        y volverían a recortarse contra el borde.
+        Dos columnas: texto a la izquierda, imagen a la derecha, mitad y
+        mitad. Bajo `sm` es una sola columna, texto arriba e imagen como
+        banda debajo.
       */}
-      <div className="flex flex-1 flex-col justify-center px-4 py-8 md:px-6">
-        <h1 ref={title} className="flex flex-col">
-          <span className="block overflow-hidden">
-            <span
-              data-fit-line
-              className="block whitespace-nowrap text-poster text-chalk"
-            >
-              {line1}
-            </span>
-          </span>
+      <div className="flex flex-1 flex-col sm:flex-row">
+        {/*
+          El margen vive en el contenedor de afuera y el <h1> medido no tiene
+          ninguno: `clientWidth` incluye el padding, así que si midiéramos un
+          elemento con `px-4` las líneas saldrían 32px más anchas de lo que
+          cabe y volverían a recortarse contra el borde.
 
-          <span className="block overflow-hidden">
-            <span
-              data-fit-line
-              className="block whitespace-nowrap text-poster text-chalk"
-            >
-              {line2}
-            </span>
-          </span>
-
-          {/*
-            La tercera línea comparte renglón con la imagen en escritorio, así
-            que se le pide el 44% del ancho y la tira ocupa el resto. Por debajo
-            de `sm` la fila se convierte en columna: la línea va a ancho completo
-            y la imagen baja como banda. Antes estaba en `sm:block` a secas, o
-            sea que en un teléfono no aparecía en absoluto y quedaba un hueco
-            negro donde debía estar.
-          */}
-          <span className="mt-3 flex flex-col gap-5 sm:mt-0 sm:flex-row sm:items-end sm:gap-8">
-            {/* shrink-0: en la fila de escritorio, sin esto flexbox encogería
-                la caja por debajo del ancho al que se acaba de ajustar. */}
-            <span className="block shrink-0 overflow-hidden">
+          `min-w-0`: sin esto, el ancho mínimo de un ítem flex lo pone su
+          contenido. Las líneas miden `w-max`, así que su propio ancho crecía
+          la columna, lo que disparaba el `ResizeObserver` del fit, que volvía
+          a agrandar el texto: una espiral de crecimiento en cada frame.
+        */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center px-4 py-8 md:px-6">
+          <h1 ref={title} className="flex flex-col">
+            <span className="block overflow-hidden">
               <span
                 data-fit-line
-                data-fit-ratio="0.44"
-                className="block whitespace-nowrap text-poster text-chalk-2"
+                className="block w-max whitespace-nowrap text-poster text-chalk"
+              >
+                {line1}
+              </span>
+            </span>
+
+            <span className="block overflow-hidden">
+              <span
+                data-fit-line
+                className="block w-max whitespace-nowrap text-poster text-chalk"
+              >
+                {line2}
+              </span>
+            </span>
+
+            <span className="block overflow-hidden">
+              <span
+                data-fit-line
+                className="block w-max whitespace-nowrap text-poster text-chalk-2"
               >
                 {line3}
               </span>
             </span>
+          </h1>
+        </div>
 
-            {/* Altura propia en vh: si dependiera de la fila (h-auto) queda
-                atada al tamaño de "LA VIDA", que la aplasta en una tira
-                demasiado baja y recorta los espejos por arriba y abajo. */}
-            <span
-              data-hero-strip
-              className="relative block h-[26vh] overflow-hidden sm:h-[34vh] sm:flex-1"
-            >
-              <picture>
-                <source srcSet={images.hero.webp} type="image/webp" />
-                <img
-                  data-hero-strip-inner
-                  src={images.hero.src}
-                  alt={images.hero.alt}
-                  fetchPriority="high"
-                  className="absolute inset-0 h-full w-full scale-110 object-cover grayscale contrast-125 will-change-transform"
-                />
-              </picture>
-            </span>
-          </span>
-        </h1>
+        <span
+          data-hero-strip
+          className="relative block h-[34vh] overflow-hidden sm:h-auto sm:flex-1"
+        >
+          <picture>
+            <source srcSet={images.hero.webp} type="image/webp" />
+            <img
+              data-hero-strip-inner
+              src={images.hero.src}
+              alt={images.hero.alt}
+              fetchPriority="high"
+              className="absolute inset-0 h-full w-full scale-110 object-cover grayscale contrast-125 will-change-transform"
+            />
+          </picture>
+        </span>
       </div>
 
       {/*
@@ -141,7 +137,10 @@ export default function Hero() {
         las tres celdas ya no hay líneas, las separa el aire.
       */}
       <div className="flex flex-col gap-8 border-t-2 border-chalk px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:gap-12 md:px-6">
-        <p data-hero-cell className="max-w-sm font-sans text-lg leading-snug text-chalk">
+        <p
+          data-hero-cell
+          className="max-w-sm font-mono text-sm uppercase leading-snug tracking-[0.14em] text-chalk"
+        >
           {business.claim.tail}
         </p>
 

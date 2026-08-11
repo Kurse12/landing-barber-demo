@@ -131,7 +131,7 @@ Una familia de layout por sección.
 
 | Sección | Familia |
 | --- | --- |
-| Portada | Póster: tres líneas apiladas, imagen dentro del titular, pie de datos |
+| Portada | Póster: dos columnas, tres líneas apiladas a la izquierda y foto a sangre a la derecha, pie de datos |
 | La carta | Lista numerada alineada en mono, inversión total en hover |
 | La casa | Bloques + banda de imagen a sangre + cifras a cuerpo de cartel |
 | Las manos | Tres retratos con parallax de distinta profundidad |

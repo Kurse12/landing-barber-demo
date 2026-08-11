@@ -204,7 +204,7 @@ export default function Footer() {
           ref={mark}
           data-footer-mark
           aria-hidden="true"
-          className="block whitespace-nowrap font-display text-[14vw] uppercase leading-[0.8] tracking-[-0.05em] text-chalk"
+          className="block w-max whitespace-nowrap font-display text-[14vw] uppercase leading-[0.8] tracking-[-0.05em] text-chalk"
         >
           {business.name}
         </p>
