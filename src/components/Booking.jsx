@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { business, formatPrice, schedule, services, team } from '../data/site'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
@@ -30,23 +30,62 @@ const fieldBase =
   'w-full border-2 bg-void px-4 py-3.5 font-sans text-sm text-chalk ' +
   'transition-colors duration-150 placeholder:text-chalk-2 focus:outline-none'
 
-function validate(form, minDate) {
+// El input date entrega "YYYY-MM-DD" en hora local. new Date(dateStr) sin hora
+// lo interpreta en UTC, así que en Buenos Aires (UTC-3) el día de la semana
+// puede leerse corrido un día. Fijar la hora a medianoche local lo evita.
+function dayScheduleFor(dateStr) {
+  const dayName = DAYS[new Date(`${dateStr}T00:00:00`).getDay()]
+  return schedule.find((row) => row.day === dayName)
+}
+
+function validate(form, minDate, nowTime) {
   const errors = {}
   if (form.name.trim().length < 2) errors.name = 'Poné tu nombre para saber a quién esperamos.'
   // Sin validar el formato exacto: los teléfonos argentinos se escriben de
   // cinco maneras distintas y rechazar una válida cuesta más que aceptar una rara.
-  if (form.phone.replace(/\D/g, '').length < 8) errors.phone = 'Necesitamos un teléfono de contacto.'
-  if (!form.date) errors.date = 'Elegí un día.'
-  else if (form.date < minDate) errors.date = 'Ese día ya pasó.'
-  if (!form.time) errors.time = 'Elegí una hora.'
+  if (form.phone.replace(/\D/g, '').length < 8) errors.phone = 'Dejanos un teléfono de contacto.'
+
+  if (!form.date) {
+    errors.date = 'Elegí un día.'
+  } else if (form.date < minDate) {
+    errors.date = 'Ese día ya pasó.'
+  } else if (dayScheduleFor(form.date)?.hours === 'Cerrado') {
+    errors.date = 'Ese día cerramos, elegí otro.'
+  }
+
+  if (!form.time) {
+    errors.time = 'Elegí una hora.'
+  } else if (!errors.date) {
+    // Mismo día: una hora que ya pasó no es un turno posible aunque el
+    // día siga siendo válido.
+    if (form.date === minDate && form.time <= nowTime) {
+      errors.time = 'Esa hora ya pasó, elegí otra.'
+    } else {
+      const day = dayScheduleFor(form.date)
+      const [open, close] = day.hours.split(' - ')
+      if (form.time < open || form.time > close) {
+        errors.time = `Ese día atendemos de ${open} a ${close}.`
+      }
+    }
+  }
+
   return errors
 }
 
-function Field({ id, label, error, className = '', children }) {
+function Field({ id, label, required = false, error, className = '', children }) {
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
       <label htmlFor={id} className="label">
         {label}
+        {/* Asterisco visible + `required` nativo en el input: el primero avisa
+            a golpe de vista, el segundo lo anuncia a un lector de pantalla
+            antes de que el usuario llegue a enviar el formulario. */}
+        {required && (
+          <span aria-hidden="true" className="text-chalk">
+            {' '}
+            *
+          </span>
+        )}
       </label>
       {children}
       {/*
@@ -54,15 +93,19 @@ function Field({ id, label, error, className = '', children }) {
         una plancha de tiza con el tipo calado. Es la misma señal que usa la
         acción principal, y por eso se reconoce sin necesidad de rojo.
       */}
+      {/*
+        Solo opacity, nunca height: el sistema no anima layout (DESIGN.md
+        s7). El mensaje reserva su lugar de una y aparece con un fundido
+        rápido, coherente con que un cartel no tiene estados intermedios.
+      */}
       <AnimatePresence>
         {error && (
           <motion.p
             id={`${id}-error`}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: EASE }}
-            className="overflow-hidden"
           >
             <span className="mt-1 inline-block bg-chalk px-2 py-1 font-mono text-xs text-void">
               {error}
@@ -74,15 +117,28 @@ function Field({ id, label, error, className = '', children }) {
   )
 }
 
-export default function Booking() {
+export default function Booking({ selectedService }) {
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
   const [status, setStatus] = useState('idle') // idle | sending | sent
 
+  // Quien elige un servicio en La carta no debería tener que volver a
+  // buscarlo acá: el clic en esa fila manda el id hasta este formulario.
+  useEffect(() => {
+    if (selectedService) {
+      setForm((prev) => ({ ...prev, service: selectedService }))
+    }
+  }, [selectedService])
+
   const reduced = useReducedMotionPolicy()
   const today = new Date()
   const todayName = DAYS[today.getDay()]
-  const minDate = today.toISOString().slice(0, 10)
+  // Fecha y hora locales, no toISOString(): esa conversión pasa por UTC, y en
+  // Buenos Aires (UTC-3) después de las 21:00 ya cae en el día siguiente,
+  // así que bloquearía reservar para hoy en el propio horario nocturno.
+  const pad = (n) => String(n).padStart(2, '0')
+  const minDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+  const nowTime = `${pad(today.getHours())}:${pad(today.getMinutes())}`
 
   const update = (field) => (event) => {
     const { value } = event.target
@@ -90,13 +146,18 @@ export default function Booking() {
     // Validación en línea: el error se va en cuanto el usuario lo corrige, sin
     // esperar a que reenvíe. Solo se limpia, nunca se añade mientras escribe.
     setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
+    // Si ya había un turno confirmado, empezar a completar uno nuevo retira
+    // ese aviso: si no, queda diciendo "recibimos tu pedido" bajo un formulario
+    // que el usuario está llenando de nuevo, y eso mezcla el estado viejo con
+    // el que está armando ahora.
+    setStatus((prev) => (prev === 'sent' ? 'idle' : prev))
   }
 
   // Demo: no hay backend ni WhatsApp real detrás de este formulario. En un
   // sitio real, esto abriría WhatsApp con el pedido ya redactado.
   const handleSubmit = (event) => {
     event.preventDefault()
-    const found = validate(form, minDate)
+    const found = validate(form, minDate, nowTime)
     setErrors(found)
 
     if (Object.keys(found).length > 0) {
@@ -105,8 +166,15 @@ export default function Booking() {
     }
 
     setStatus('sending')
-    setForm(emptyForm)
-    setStatus('sent')
+
+    // Sin el retraso, React agrupa los tres cambios de estado del handler en
+    // un solo render y salta directo a "sent": el usuario nunca ve "Enviando"
+    // y el botón pasa de reposo a confirmado sin marcar que el pedido se
+    // está procesando.
+    window.setTimeout(() => {
+      setForm(emptyForm)
+      setStatus('sent')
+    }, 900)
   }
 
   // El campo con error sube a tiza plena: contra el gris de los demás, la fila
@@ -127,107 +195,140 @@ export default function Booking() {
 
       <div className="shell grid gap-20 pb-24 md:pb-32 lg:grid-cols-[1.5fr_1fr] lg:gap-24">
         <Reveal>
-          <form onSubmit={handleSubmit} noValidate className="grid gap-7 sm:grid-cols-2">
-            <Field id="name" label="Nombre" error={errors.name}>
-              <input
-                id="name"
-                type="text"
-                autoComplete="name"
-                placeholder="Cómo te llamás"
-                aria-invalid={Boolean(errors.name)}
-                aria-describedby={errors.name ? 'name-error' : undefined}
-                className={fieldClass('name')}
-                value={form.name}
-                onChange={update('name')}
-              />
-            </Field>
+          {/* Mismo aviso que el resto de la página, pero acá llega antes de que
+              alguien escriba su nombre y teléfono, no después de enviarlos:
+              es el único punto donde el aviso corría detrás del dato en vez
+              de delante. */}
+          <p className="label">Formulario de demostración, no se envía a ningún lado real</p>
+          <p className="label mt-2">Campos con * son obligatorios</p>
+          {/*
+            Dos grupos, no siete campos sueltos: "Vos" (quién sos) y "Turno"
+            (qué querés y cuándo). El <fieldset> es la agrupación semántica
+            correcta para un lector de pantalla; el <legend> reusa el mismo
+            vocabulario mono de las etiquetas de la columna de al lado
+            ("Horario", "Dónde estamos"), así que no suma lenguaje visual
+            nuevo. `min-w-0` porque un <fieldset> trae un mínimo intrínseco
+            propio del navegador que, sin esto, puede desbordar la grilla en
+            pantallas angostas.
+          */}
+          <form onSubmit={handleSubmit} noValidate className="mt-4 flex flex-col gap-12">
+            <fieldset className="m-0 min-w-0 border-0 p-0">
+              <legend className="label mb-7 block w-full p-0">Vos</legend>
+              <div className="grid gap-7 sm:grid-cols-2">
+                <Field id="name" label="Nombre" required error={errors.name}>
+                  <input
+                    id="name"
+                    type="text"
+                    autoComplete="name"
+                    maxLength={80}
+                    required
+                    placeholder="Cómo te llamás"
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={errors.name ? 'name-error' : undefined}
+                    className={fieldClass('name')}
+                    value={form.name}
+                    onChange={update('name')}
+                  />
+                </Field>
 
-            <Field id="phone" label="Teléfono" error={errors.phone}>
-              <input
-                id="phone"
-                type="tel"
-                autoComplete="tel"
-                placeholder="11 2222 3333"
-                aria-invalid={Boolean(errors.phone)}
-                aria-describedby={errors.phone ? 'phone-error' : undefined}
-                className={fieldClass('phone')}
-                value={form.phone}
-                onChange={update('phone')}
-              />
-            </Field>
+                <Field id="phone" label="Teléfono" required error={errors.phone}>
+                  <input
+                    id="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    maxLength={20}
+                    required
+                    placeholder="11 2222 3333"
+                    aria-invalid={Boolean(errors.phone)}
+                    aria-describedby={errors.phone ? 'phone-error' : undefined}
+                    className={fieldClass('phone')}
+                    value={form.phone}
+                    onChange={update('phone')}
+                  />
+                </Field>
+              </div>
+            </fieldset>
 
-            <Field id="service" label="Servicio">
-              <select
-                id="service"
-                className={fieldClass('service')}
-                value={form.service}
-                onChange={update('service')}
-              >
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name} ({formatPrice(service.price)})
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <fieldset className="m-0 min-w-0 border-0 p-0">
+              <legend className="label mb-7 block w-full p-0">Turno</legend>
+              <div className="grid gap-7 sm:grid-cols-2">
+                <Field id="service" label="Servicio">
+                  <select
+                    id="service"
+                    className={fieldClass('service')}
+                    value={form.service}
+                    onChange={update('service')}
+                  >
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} ({formatPrice(service.price)})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-            <Field id="barber" label="Barbero">
-              <select
-                id="barber"
-                className={fieldClass('barber')}
-                value={form.barber}
-                onChange={update('barber')}
-              >
-                <option value="cualquiera">El que esté libre</option>
-                {team.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                <Field id="barber" label="Barbero">
+                  <select
+                    id="barber"
+                    className={fieldClass('barber')}
+                    value={form.barber}
+                    onChange={update('barber')}
+                  >
+                    <option value="cualquiera">El que esté libre</option>
+                    {team.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-            <Field id="date" label="Día" error={errors.date}>
-              <input
-                id="date"
-                type="date"
-                min={minDate}
-                aria-invalid={Boolean(errors.date)}
-                aria-describedby={errors.date ? 'date-error' : undefined}
-                className={`${fieldClass('date')} [color-scheme:dark]`}
-                value={form.date}
-                onChange={update('date')}
-              />
-            </Field>
+                <Field id="date" label="Día" required error={errors.date}>
+                  <input
+                    id="date"
+                    type="date"
+                    min={minDate}
+                    required
+                    aria-invalid={Boolean(errors.date)}
+                    aria-describedby={errors.date ? 'date-error' : undefined}
+                    className={`${fieldClass('date')} [color-scheme:dark]`}
+                    value={form.date}
+                    onChange={update('date')}
+                  />
+                </Field>
 
-            <Field id="time" label="Hora" error={errors.time}>
-              <input
-                id="time"
-                type="time"
-                aria-invalid={Boolean(errors.time)}
-                aria-describedby={errors.time ? 'time-error' : undefined}
-                className={`${fieldClass('time')} [color-scheme:dark]`}
-                value={form.time}
-                onChange={update('time')}
-              />
-            </Field>
+                <Field id="time" label="Hora" required error={errors.time}>
+                  <input
+                    id="time"
+                    type="time"
+                    required
+                    aria-invalid={Boolean(errors.time)}
+                    aria-describedby={errors.time ? 'time-error' : undefined}
+                    className={`${fieldClass('time')} [color-scheme:dark]`}
+                    value={form.time}
+                    onChange={update('time')}
+                  />
+                </Field>
 
-            <Field
-              id="notes"
-              label="Algo que debamos saber (opcional)"
-              className="sm:col-span-2"
-            >
-              <textarea
-                id="notes"
-                rows="3"
-                placeholder="Alergias, referencia de corte, si venís con un chico"
-                className={`${fieldClass('notes')} resize-none`}
-                value={form.notes}
-                onChange={update('notes')}
-              />
-            </Field>
+                <Field
+                  id="notes"
+                  label="Algo que debamos saber (opcional)"
+                  className="sm:col-span-2"
+                >
+                  <textarea
+                    id="notes"
+                    rows="3"
+                    maxLength={400}
+                    placeholder="Alergias, referencia de corte, si venís con un chico"
+                    className={`${fieldClass('notes')} resize-none`}
+                    value={form.notes}
+                    onChange={update('notes')}
+                  />
+                </Field>
+              </div>
+            </fieldset>
 
-            <div className="sm:col-span-2">
+            <div>
               <Button type="submit" disabled={status === 'sending'}>
                 {/*
                   El desenfoque tapa el cruce entre las dos etiquetas: sin él
@@ -254,7 +355,7 @@ export default function Booking() {
                   animate={{ opacity: 1, transform: 'translateY(0px)' }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25, ease: EASE }}
-                  className="bg-chalk px-5 py-4 text-sm leading-relaxed text-void sm:col-span-2"
+                  className="bg-chalk px-5 py-4 text-sm leading-relaxed text-void"
                 >
                   Recibimos tu pedido de turno. Es una demo, así que no se envía a
                   ningún lado de verdad: en un sitio real esto abriría WhatsApp con
@@ -296,32 +397,42 @@ export default function Booking() {
 
           <h3 className="label mt-12">Dónde estamos</h3>
           <p className="mt-4 text-sm text-chalk-2">{business.address}</p>
+          {/* Sin `href` real detrás: un click medio o "abrir en pestaña
+              nueva" no tienen destino que seguir, solo el propio aviso. */}
           <a
-            href={business.mapsUrl}
-            target="_blank"
-            rel="noreferrer"
+            href="#"
             onClick={(event) => {
               event.preventDefault()
               showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al mapa del negocio.')
             }}
-            className="mt-3 inline-block border-b-2 border-chalk py-1 font-mono text-xs uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 hover:opacity-60"
+            className="mt-3 inline-block border-b-2 border-chalk py-1 font-mono text-xs uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
           >
             Ver en Google Maps
           </a>
 
           <h3 className="label mt-12">Contacto directo</h3>
           {/* py-2 en los enlaces: en móvil son el objetivo táctil principal de
-              esta columna y con solo la altura de línea se quedan en 20px. */}
+              esta columna y con solo la altura de línea se quedan en 20px.
+              Mismo trato de demo que el resto de los enlaces de la página:
+              sin `href` real de teléfono o correo detrás del clic. */}
           <p className="mt-2 flex flex-col font-mono text-sm">
             <a
-              href={`tel:${business.phoneHref}`}
-              className="w-fit py-2 text-chalk transition-opacity duration-150 hover:opacity-60"
+              href="#"
+              onClick={(event) => {
+                event.preventDefault()
+                showDemoToast('Esto es una demo: en un sitio real este enlace abriría el teléfono para llamar.')
+              }}
+              className="w-fit py-2 text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
             >
               {business.phone}
             </a>
             <a
-              href={`mailto:${business.email}`}
-              className="w-fit py-2 text-chalk-2 transition-colors duration-150 hover:text-chalk"
+              href="#"
+              onClick={(event) => {
+                event.preventDefault()
+                showDemoToast('Esto es una demo: en un sitio real este enlace abriría el correo para escribir.')
+              }}
+              className="w-fit py-2 text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
             >
               {business.email}
             </a>

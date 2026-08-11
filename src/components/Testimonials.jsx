@@ -44,7 +44,10 @@ export default function Testimonials() {
         tres líneas no compiten por atención: se leen los tres a medias. Uno a
         cuerpo de cartel se lee entero.
       */}
-      <Reveal className="shell overflow-hidden pb-16">
+      {/* aria-live: el carrusel cambia de contenido sin recargar la página,
+          y sin esto un lector de pantalla nunca se entera de que la cita
+          cambió al usar los controles de abajo. */}
+      <Reveal className="shell overflow-hidden pb-16" aria-live="polite" aria-atomic="true">
         <AnimatePresence mode="wait" initial={false}>
           <motion.figure
             key={item.id}
@@ -98,7 +101,7 @@ export default function Testimonials() {
             type="button"
             onClick={() => go(-1)}
             aria-label="Opinión anterior"
-            className="flex h-12 w-12 items-center justify-center border-2 border-chalk-3 text-lg text-chalk transition-[background-color,border-color,color,transform] duration-150 ease-out-strong hover:border-chalk hover:bg-chalk hover:text-void active:translate-y-[2px]"
+            className="flex h-12 w-12 items-center justify-center border-2 border-chalk-3 text-lg text-chalk transition-[background-color,border-color,color,transform] duration-150 ease-out-strong can-hover:hover:border-chalk can-hover:hover:bg-chalk can-hover:hover:text-void active:translate-y-[2px]"
           >
             <span aria-hidden="true">&larr;</span>
           </button>
@@ -106,7 +109,7 @@ export default function Testimonials() {
             type="button"
             onClick={() => go(1)}
             aria-label="Opinión siguiente"
-            className="flex h-12 w-12 items-center justify-center border-2 border-chalk-3 text-lg text-chalk transition-[background-color,border-color,color,transform] duration-150 ease-out-strong hover:border-chalk hover:bg-chalk hover:text-void active:translate-y-[2px]"
+            className="flex h-12 w-12 items-center justify-center border-2 border-chalk-3 text-lg text-chalk transition-[background-color,border-color,color,transform] duration-150 ease-out-strong can-hover:hover:border-chalk can-hover:hover:bg-chalk can-hover:hover:text-void active:translate-y-[2px]"
           >
             <span aria-hidden="true">&rarr;</span>
           </button>

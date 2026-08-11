@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { business, nav } from '../data/site'
 import { handleAnchorClick } from '../lib/scroll'
@@ -9,6 +9,8 @@ const EASE = [0.23, 1, 0.32, 1]
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const reduced = useReducedMotionPolicy()
+  const panelRef = useRef(null)
+  const lastFocusedRef = useRef(null)
 
   // Al pasar a escritorio el panel móvil sobra: si queda abierto, tapa el hero.
   useEffect(() => {
@@ -29,6 +31,39 @@ export default function Navbar() {
     }
   }, [open])
 
+  /*
+    El panel tapa el resto de la página pero no la saca del árbol: sin `inert`,
+    Tab seguía llegando a los enlaces de las secciones de abajo, cubiertos pero
+    todavía enfocables. El foco entra en el primer enlace del panel al abrir y
+    vuelve al botón de menú al cerrar.
+  */
+  useEffect(() => {
+    const targets = [
+      document.querySelector('main'),
+      document.querySelector('footer'),
+      document.getElementById('mobile-bar'),
+    ].filter(Boolean)
+
+    if (open) {
+      lastFocusedRef.current = document.activeElement
+      targets.forEach((el) => {
+        el.inert = true
+      })
+      panelRef.current?.querySelector('a')?.focus()
+    } else {
+      targets.forEach((el) => {
+        el.inert = false
+      })
+      lastFocusedRef.current?.focus?.()
+    }
+
+    return () => {
+      targets.forEach((el) => {
+        el.inert = false
+      })
+    }
+  }, [open])
+
   return (
     <>
       {/*
@@ -44,7 +79,7 @@ export default function Navbar() {
           <a
             href="#inicio"
             onClick={handleAnchorClick('inicio', () => setOpen(false))}
-            className="font-display text-lg uppercase leading-none tracking-tight text-chalk transition-opacity duration-150 hover:opacity-60"
+            className="font-display text-lg uppercase leading-none tracking-tight text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
           >
             {business.name}
           </a>
@@ -56,7 +91,7 @@ export default function Navbar() {
                   <a
                     href={`#${item.id}`}
                     onClick={handleAnchorClick(item.id)}
-                    className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-chalk-2 transition-colors duration-150 hover:text-chalk"
+                    className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
                   >
                     {item.label}
                   </a>
@@ -70,7 +105,7 @@ export default function Navbar() {
           <a
             href="#reserva"
             onClick={handleAnchorClick('reserva')}
-            className="hidden border-2 border-chalk bg-chalk px-5 py-2.5 font-mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-void transition-[background-color,color,transform] duration-150 ease-out-strong hover:bg-void hover:text-chalk active:translate-y-[2px] md:block"
+            className="hidden border-2 border-chalk bg-chalk px-5 py-2.5 font-mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-void transition-[background-color,color,transform] duration-150 ease-out-strong can-hover:hover:bg-void can-hover:hover:text-chalk active:translate-y-[2px] md:block"
           >
             Sacar turno
           </a>
@@ -105,13 +140,14 @@ export default function Navbar() {
       <AnimatePresence>
         {open && (
           <motion.nav
+            ref={panelRef}
             id="menu-movil"
             aria-label="Principal (móvil)"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduced ? 0 : 0.2, ease: EASE }}
-            className="fixed inset-0 z-40 flex flex-col justify-center gap-1 bg-chalk px-4 pt-14 md:hidden"
+            className="fixed inset-0 z-[45] flex flex-col justify-center gap-1 bg-chalk px-4 pt-14 md:hidden"
           >
             {nav.map((item, i) => (
               <motion.a

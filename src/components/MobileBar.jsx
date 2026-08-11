@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ScrollTrigger, useGSAP } from '../lib/gsap'
-import { business } from '../data/site'
 import { handleAnchorClick } from '../lib/scroll'
+import { showDemoToast } from '../lib/demoToast'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
+
+// Mismo aviso de demo que el resto de los enlaces de contacto: sin `href`
+// real de teléfono detrás del clic.
+const handleCallClick = (event) => {
+  event.preventDefault()
+  showDemoToast('Esto es una demo: en un sitio real este enlace abriría el teléfono para llamar.')
+}
 
 /**
  * Barra de acción fija, solo en móvil.
@@ -46,6 +53,7 @@ export default function MobileBar() {
     <AnimatePresence>
       {visible && (
         <motion.div
+          id="mobile-bar"
           initial={reduced ? { opacity: 0 } : { transform: 'translateY(100%)' }}
           animate={reduced ? { opacity: 1 } : { transform: 'translateY(0%)' }}
           exit={reduced ? { opacity: 0 } : { transform: 'translateY(100%)' }}
@@ -67,7 +75,8 @@ export default function MobileBar() {
             Sacar turno
           </a>
           <a
-            href={`tel:${business.phoneHref}`}
+            href="#"
+            onClick={handleCallClick}
             className="flex items-center justify-center px-8 py-5 font-mono text-sm font-bold uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 active:opacity-50"
           >
             Llamar

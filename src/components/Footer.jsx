@@ -5,16 +5,32 @@ import { handleAnchorClick } from '../lib/scroll'
 import { showDemoToast } from '../lib/demoToast'
 import Reveal from './ui/Reveal'
 
+// `dest` lleva su propia preposición y artículo: "al Instagram del negocio"
+// no se arma igual que "a Facebook del negocio", y es la misma cuenta que
+// enlaza Gallery, así que el aviso usa la misma forma para no nombrar el
+// mismo destino de dos maneras distintas según la sección.
+//
+// `href` guarda el destino real solo como dato (lo que enlazaría un sitio de
+// verdad); ningún elemento interactivo lo usa como atributo `href`, así que
+// no hay URL real detrás del enlace que un click medio o "abrir en pestaña
+// nueva" puedan seguir sin pasar por el aviso.
 const socials = [
-  { id: 'ig', label: 'Instagram', href: business.social.instagram },
-  { id: 'fb', label: 'Facebook', href: business.social.facebook },
-  { id: 'tt', label: 'TikTok', href: business.social.tiktok },
+  { id: 'ig', label: 'Instagram', dest: 'al Instagram del negocio', href: business.social.instagram },
+  { id: 'fb', label: 'Facebook', dest: 'a Facebook del negocio', href: business.social.facebook },
+  { id: 'tt', label: 'TikTok', dest: 'a TikTok del negocio', href: business.social.tiktok },
 ]
 
 // Demo: el enlace no navega a ningún perfil real, avisa por qué.
-const handleSocialClick = (label) => (event) => {
+const handleSocialClick = (dest) => (event) => {
   event.preventDefault()
-  showDemoToast(`Esto es una demo: en un sitio real este enlace llevaría a ${label}.`)
+  showDemoToast(`Esto es una demo: en un sitio real este enlace llevaría ${dest}.`)
+}
+
+// Mismo trato que los links sociales: el aviso, no el marcado real, es lo
+// único que existe detrás del clic.
+const handleContactClick = (dest) => (event) => {
+  event.preventDefault()
+  showDemoToast(`Esto es una demo: en un sitio real este enlace ${dest}.`)
 }
 
 export default function Footer() {
@@ -59,7 +75,7 @@ export default function Footer() {
           <a
             href="#reserva"
             onClick={handleAnchorClick('reserva')}
-            className="group flex items-center justify-between gap-8 border-2 border-chalk bg-chalk px-7 py-5 font-mono text-sm font-bold uppercase tracking-[0.14em] text-void transition-[background-color,color,transform] duration-150 ease-out-strong hover:bg-void hover:text-chalk active:translate-y-[2px] md:min-w-[20rem]"
+            className="group flex items-center justify-between gap-8 border-2 border-chalk bg-chalk px-7 py-5 font-mono text-sm font-bold uppercase tracking-[0.14em] text-void transition-[background-color,color,transform] duration-150 ease-out-strong can-hover:hover:bg-void can-hover:hover:text-chalk active:translate-y-[2px] md:min-w-[20rem]"
           >
             Sacar turno
             <span
@@ -84,14 +100,16 @@ export default function Footer() {
           <p className="label">Contacto</p>
           <p className="mt-3 flex flex-col font-mono text-sm">
             <a
-              href={`tel:${business.phoneHref}`}
-              className="w-fit py-1.5 text-chalk transition-opacity duration-150 hover:opacity-60"
+              href="#"
+              onClick={handleContactClick('abriría el teléfono para llamar')}
+              className="w-fit py-1.5 text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
             >
               {business.phone}
             </a>
             <a
-              href={`mailto:${business.email}`}
-              className="w-fit py-1.5 text-chalk-2 transition-colors duration-150 hover:text-chalk"
+              href="#"
+              onClick={handleContactClick('abriría el correo para escribir')}
+              className="w-fit py-1.5 text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
             >
               {business.email}
             </a>
@@ -106,7 +124,7 @@ export default function Footer() {
                 <a
                   href={`#${item.id}`}
                   onClick={handleAnchorClick(item.id)}
-                  className="text-chalk-2 transition-colors duration-150 hover:text-chalk"
+                  className="text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
                 >
                   {item.label}
                 </a>
@@ -121,11 +139,9 @@ export default function Footer() {
             {socials.map((social) => (
               <li key={social.id}>
                 <a
-                  href={social.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={handleSocialClick(social.label)}
-                  className="text-chalk-2 transition-colors duration-150 hover:text-chalk"
+                  href="#"
+                  onClick={handleSocialClick(social.dest)}
+                  className="text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
                 >
                   {social.label}
                 </a>
@@ -158,21 +174,23 @@ export default function Footer() {
           © {new Date().getFullYear()} {business.name}
         </p>
         <ul className="flex gap-6">
-          <li>
-            <a href="#" className="transition-colors duration-150 hover:text-chalk">
-              Términos
-            </a>
-          </li>
-          <li>
-            <a href="#" className="transition-colors duration-150 hover:text-chalk">
-              Privacidad
-            </a>
-          </li>
-          <li>
-            <a href="#" className="transition-colors duration-150 hover:text-chalk">
-              Cookies
-            </a>
-          </li>
+          {['Términos', 'Privacidad', 'Cookies'].map((label) => (
+            <li key={label}>
+              {/* Sin página real detrás: mismo aviso de demo que el resto de
+                  los enlaces que no navegan a ningún lado. Un `href="#"` sin
+                  manejar saltaría al tope de la página sin avisar por qué. */}
+              <a
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault()
+                  showDemoToast(`Esto es una demo: en un sitio real este enlace llevaría a la página de ${label}.`)
+                }}
+                className="transition-colors duration-150 can-hover:hover:text-chalk"
+              >
+                {label}
+              </a>
+            </li>
+          ))}
         </ul>
       </div>
     </footer>

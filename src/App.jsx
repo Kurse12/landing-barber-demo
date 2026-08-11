@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSmoothScroll } from './hooks/useSmoothScroll'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
@@ -15,6 +16,11 @@ import Toast from './components/ui/Toast'
 export default function App() {
   useSmoothScroll()
 
+  // Elegir un servicio en La carta y que Turnos lo recuerde: sin esto, cada
+  // clic manda al formulario pero el <select> vuelve al primer servicio de
+  // la lista, y quien ya eligió tiene que volver a buscarlo.
+  const [selectedService, setSelectedService] = useState(null)
+
   return (
     <>
       {/* Grano: fijo y sin eventos, nunca sobre un contenedor que scrollea. */}
@@ -30,12 +36,12 @@ export default function App() {
       <main className="w-full max-w-full overflow-x-clip">
         <Hero />
         <Marquee />
-        <Services />
+        <Services onSelectService={setSelectedService} />
         <About />
         <Team />
         <Gallery />
         <Testimonials />
-        <Booking />
+        <Booking selectedService={selectedService} />
       </main>
       <Footer />
 

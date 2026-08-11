@@ -1,4 +1,4 @@
-# Sistema de diseño: Navaja & Roble
+# Sistema de diseño: cartel monocromo
 
 Fuente de verdad del lenguaje visual. Cualquier sección nueva se genera contra
 este documento.
@@ -237,7 +237,9 @@ invierte de golpe, no se funde. Un cartel no tiene estados intermedios.
 
 Sin emojis. Sin color de acento. Sin `Inter` ni serif. Sin `#000000` ni
 `#ffffff`. Sin radios, sombras ni resplandores. Sin cristal ni desenfoque de
-fondo. Sin degradados. Sin nada rotado. Sin reglas entre filas ni entre columnas.
+fondo. Sin degradados. Sin nada rotado, salvo la transformación funcional del
+ícono de menú a X al abrirse: no es un giro decorativo, es la única forma
+convencional de esa afordancia. Sin reglas entre filas ni entre columnas.
 Sin capturas de producto falsas hechas con `div`. Sin SVG decorativos dibujados a
 mano. Sin etiquetas superpuestas sobre las fotos. Sin pies de foto pretenciosos.
 Sin pistas de scroll. Sin tiras de ciudad, hora o clima. Sin sellos de versión.

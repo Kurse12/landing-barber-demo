@@ -41,7 +41,7 @@ export default function Toast() {
             <button
               type="button"
               onClick={() => setMessage(null)}
-              className="shrink-0 font-mono text-xs font-bold uppercase tracking-[0.14em] text-void/60 transition-colors duration-150 hover:text-void"
+              className="flex h-11 min-w-11 shrink-0 items-center justify-center font-mono text-xs font-bold uppercase tracking-[0.14em] text-void/60 transition-colors duration-150 can-hover:hover:text-void"
             >
               Cerrar
             </button>

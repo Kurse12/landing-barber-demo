@@ -1,22 +1,36 @@
 import heroImg from '../assets/hero.jpg'
+import heroImgWebp from '../assets/hero.jpg?format=webp'
 import nosotrosImg from '../assets/nosotros.jpg'
+import nosotrosImgWebp from '../assets/nosotros.jpg?format=webp'
 import marcoImg from '../assets/equipo_marco.jpg'
+import marcoImgWebp from '../assets/equipo_marco.jpg?format=webp'
 import luciaImg from '../assets/equipo_lucia.jpg'
+import luciaImgWebp from '../assets/equipo_lucia.jpg?format=webp'
 import omarImg from '../assets/equipo_omar.jpg'
+import omarImgWebp from '../assets/equipo_omar.jpg?format=webp'
 import gal1 from '../assets/gal1.jpg'
+import gal1Webp from '../assets/gal1.jpg?format=webp'
 import gal2 from '../assets/gal2.jpg'
+import gal2Webp from '../assets/gal2.jpg?format=webp'
 import gal3 from '../assets/gal3.jpg'
+import gal3Webp from '../assets/gal3.jpg?format=webp'
 import gal4 from '../assets/gal4.jpg'
+import gal4Webp from '../assets/gal4.jpg?format=webp'
 import gal5 from '../assets/gal5.jpg'
+import gal5Webp from '../assets/gal5.jpg?format=webp'
 
-// Imágenes de las secciones que solo llevan una.
+// Imágenes de las secciones que solo llevan una. `webp` es el formato
+// preferido (30-40% más liviano a igual calidad); `src` queda como
+// respaldo para navegadores que no lo decodifiquen.
 export const images = {
   hero: {
     src: heroImg,
+    webp: heroImgWebp,
     alt: 'Interior de la barbería: tres sillones frente a espejos redondos retroiluminados',
   },
   about: {
     src: nosotrosImg,
+    webp: nosotrosImgWebp,
     alt: 'Barbero perfilando con peine y máquina el corte de un cliente',
   },
 }
@@ -37,10 +51,9 @@ export const business = {
     poster: ['Cortes', 'de toda', 'la vida'],
     tail: 'con las manos de siempre',
   },
-  // Tres formas del mismo número, porque cada destino la pide distinta:
+  // Dos formas del mismo número, porque cada destino la pide distinta:
   phone: '11 2222 3333', // como se muestra en pantalla
   phoneHref: '+541122223333', // para el enlace tel:
-  whatsapp: '5491122223333', // wa.me exige el 9 de celular después del 54
   email: 'hola@barberiaclasica.com.ar',
   address: 'Calle Principal 123, Buenos Aires',
   mapsUrl: 'https://maps.google.com/?q=Calle+Principal+123+Buenos+Aires',
@@ -68,6 +81,7 @@ export const services = [
   {
     id: 'corte',
     preview: gal1,
+    previewWebp: gal1Webp,
     name: 'Corte clásico',
     description: 'Tijera y máquina, lavado y peinado final.',
     price: 12000,
@@ -77,6 +91,7 @@ export const services = [
   {
     id: 'corte-barba',
     preview: gal3,
+    previewWebp: gal3Webp,
     name: 'Corte + Barba',
     description: 'El completo: corte a medida y perfilado de barba con toalla caliente.',
     price: 18000,
@@ -86,6 +101,7 @@ export const services = [
   {
     id: 'barba',
     preview: gal2,
+    previewWebp: gal2Webp,
     name: 'Afeitado a navaja',
     description: 'Afeitado tradicional, toalla caliente y bálsamo post-afeitado.',
     price: 10000,
@@ -95,6 +111,7 @@ export const services = [
   {
     id: 'nino',
     preview: nosotrosImg,
+    previewWebp: nosotrosImgWebp,
     name: 'Corte para chicos',
     description: 'Para los más chicos (hasta 12 años). Sin apuro y con paciencia.',
     price: 9000,
@@ -104,6 +121,7 @@ export const services = [
   {
     id: 'tinte',
     preview: gal4,
+    previewWebp: gal4Webp,
     name: 'Color y canas',
     description: 'Cobertura de canas o cambio de tono con productos sin amoníaco.',
     price: 15000,
@@ -113,6 +131,7 @@ export const services = [
   {
     id: 'ritual',
     preview: gal5,
+    previewWebp: gal5Webp,
     name: 'Ritual de la casa',
     description: 'Corte, afeitado a navaja, máscara facial y masaje capilar.',
     price: 28000,
@@ -128,6 +147,7 @@ export const team = [
     role: 'Maestro barbero · Fundador',
     bio: '22 años atrás del sillón. Especialista en clásicos y afeitado a navaja.',
     photo: marcoImg,
+    photoWebp: marcoImgWebp,
     instagram: 'https://instagram.com/marco.barber',
   },
   {
@@ -136,6 +156,7 @@ export const team = [
     role: 'Barbera · Color',
     bio: 'Degradados milimétricos y color. Se formó en Londres.',
     photo: luciaImg,
+    photoWebp: luciaImgWebp,
     instagram: 'https://instagram.com/lucia.fades',
   },
   {
@@ -144,6 +165,7 @@ export const team = [
     role: 'Barbero',
     bio: 'Diseño de barba y trabajos con navaja. Paciencia infinita con los chicos.',
     photo: omarImg,
+    photoWebp: omarImgWebp,
     instagram: 'https://instagram.com/omar.blade',
   },
 ]
@@ -152,11 +174,11 @@ export const team = [
 // y el recorte es mínimo. El hueco que queda libre lo ocupa la tarjeta de
 // Instagram que pinta Gallery.jsx: 5 fotos + 1 tarjeta = 6 celdas exactas.
 export const gallery = [
-  { id: 'g1', src: gal1, alt: 'Degradado bajo con textura despeinada arriba, visto de perfil' },
-  { id: 'g2', src: gal2, alt: 'Perfilado de barba a navaja sobre espuma de afeitar' },
-  { id: 'g3', src: gal3, alt: 'Corte con raya marcada a navaja y degradado alto' },
-  { id: 'g4', src: gal4, alt: 'Perfilado de barba y cuello, visto de perfil' },
-  { id: 'g5', src: gal5, alt: 'Las herramientas de la casa: tijeras, navaja y máquinas' },
+  { id: 'g1', src: gal1, webp: gal1Webp, alt: 'Degradado bajo con textura despeinada arriba, visto de perfil' },
+  { id: 'g2', src: gal2, webp: gal2Webp, alt: 'Perfilado de barba a navaja sobre espuma de afeitar' },
+  { id: 'g3', src: gal3, webp: gal3Webp, alt: 'Corte con raya marcada a navaja y degradado alto' },
+  { id: 'g4', src: gal4, webp: gal4Webp, alt: 'Perfilado de barba y cuello, visto de perfil' },
+  { id: 'g5', src: gal5, webp: gal5Webp, alt: 'Las herramientas de la casa: tijeras, navaja y máquinas' },
 ]
 
 // Banda de texto en bucle entre secciones.

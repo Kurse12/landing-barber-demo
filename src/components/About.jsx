@@ -104,13 +104,16 @@ export default function About() {
       {/* Banda a sangre: el respiro visual de la sección. Sin reglas propias,
           la separan el aire de arriba y de abajo. */}
       <div data-about-media className="relative h-[45vh] overflow-hidden md:h-[62vh]">
-        <img
-          data-about-media-inner
-          src={images.about.src}
-          alt={images.about.alt}
-          loading="lazy"
-          className="absolute inset-0 h-full w-full scale-115 object-cover grayscale contrast-125 will-change-transform"
-        />
+        <picture>
+          <source srcSet={images.about.webp} type="image/webp" />
+          <img
+            data-about-media-inner
+            src={images.about.src}
+            alt={images.about.alt}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full scale-115 object-cover grayscale contrast-125 will-change-transform"
+          />
+        </picture>
       </div>
 
       <div className="shell pb-24 pt-20 md:pb-32">
@@ -126,9 +129,18 @@ export default function About() {
             // va antes que su <dd>, como pide la semántica de <dl>.
             <Reveal key={stat.id} className="flex flex-col-reverse">
               <dt className="label mt-3">{stat.label}</dt>
+              {/*
+                `text-mega` a full width (128px) desborda su columna en un
+                grid de tres: "+12.000" mide ~520px y la columna, a 1440px de
+                viewport, tiene 442px. El clamp de acá tiene el mismo mínimo
+                que `text-mega` pero un techo más bajo, calculado para que
+                una cifra de siete caracteres con prefijo entre siempre en su
+                tercio, incluso en las pantallas anchas donde `.shell` llega
+                a su máximo.
+              */}
               <dd
                 data-counter={stat.id}
-                className="font-display text-mega tabular-nums text-chalk"
+                className="font-display text-[clamp(2.5rem,7vw,5.75rem)] leading-[0.84] tracking-[-0.03em] tabular-nums text-chalk"
               >
                 {`${stat.prefix ?? ''}${formatStat(stat.to, stat.decimals)}`}
               </dd>

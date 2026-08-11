@@ -118,13 +118,16 @@ export default function Hero() {
               data-hero-strip
               className="relative block h-[26vh] overflow-hidden sm:h-auto sm:flex-1"
             >
-              <img
-                data-hero-strip-inner
-                src={images.hero.src}
-                alt={images.hero.alt}
-                fetchPriority="high"
-                className="absolute inset-0 h-full w-full scale-110 object-cover grayscale contrast-125 will-change-transform"
-              />
+              <picture>
+                <source srcSet={images.hero.webp} type="image/webp" />
+                <img
+                  data-hero-strip-inner
+                  src={images.hero.src}
+                  alt={images.hero.alt}
+                  fetchPriority="high"
+                  className="absolute inset-0 h-full w-full scale-110 object-cover grayscale contrast-125 will-change-transform"
+                />
+              </picture>
             </span>
           </span>
         </h1>
@@ -151,7 +154,7 @@ export default function Hero() {
           data-hero-cell
           href="#reserva"
           onClick={handleAnchorClick('reserva')}
-          className="group flex items-center justify-between gap-6 border-2 border-chalk bg-chalk px-6 py-4 font-mono text-sm font-bold uppercase tracking-[0.14em] text-void transition-[background-color,color,transform] duration-150 ease-out-strong hover:bg-void hover:text-chalk active:translate-y-[2px]"
+          className="group flex items-center justify-between gap-6 border-2 border-chalk bg-chalk px-6 py-4 font-mono text-sm font-bold uppercase tracking-[0.14em] text-void transition-[background-color,color,transform] duration-150 ease-out-strong can-hover:hover:bg-void can-hover:hover:text-chalk active:translate-y-[2px]"
         >
           Sacar turno
           <span

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { gsap, ScrollTrigger, useGSAP, motionSafe } from '../lib/gsap'
 import { business, gallery } from '../data/site'
@@ -8,7 +9,9 @@ import SectionHeading from './ui/SectionHeading'
 
 const EASE = [0.23, 1, 0.32, 1]
 
-// Demo: el enlace no lleva a ningún perfil real, avisa por qué.
+// Demo: el enlace no lleva a ningún perfil real, avisa por qué. Sin `href`
+// real detrás (ver la lámina más abajo): así no hay URL que un click medio o
+// "abrir en pestaña nueva" puedan seguir sin pasar por el aviso.
 const handleInstagramClick = (event) => {
   event.preventDefault()
   showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al Instagram del negocio.')
@@ -20,6 +23,8 @@ export default function Gallery() {
   const track = useRef(null)
   const reduced = useReducedMotionPolicy()
   const [open, setOpen] = useState(null)
+  const closeBtnRef = useRef(null)
+  const lastFocusedRef = useRef(null)
 
   useGSAP(
     () => {
@@ -80,6 +85,40 @@ export default function Gallery() {
     }
   }, [open])
 
+  /*
+    El diálogo se porta a <body>, así que `inert` en header/main/footer no lo
+    alcanza a él pero sí a todo lo que queda tapado detrás: sin esto, Tab podía
+    llegar a un enlace cubierto por el fondo macizo del lightbox. El foco entra
+    en "Cerrar" al abrir y vuelve a la lámina que lo disparó al cerrar.
+  */
+  useEffect(() => {
+    const targets = [
+      document.querySelector('header'),
+      document.querySelector('main'),
+      document.querySelector('footer'),
+      document.getElementById('mobile-bar'),
+    ].filter(Boolean)
+
+    if (open !== null) {
+      lastFocusedRef.current = document.activeElement
+      targets.forEach((el) => {
+        el.inert = true
+      })
+      closeBtnRef.current?.focus()
+    } else {
+      targets.forEach((el) => {
+        el.inert = false
+      })
+      lastFocusedRef.current?.focus?.()
+    }
+
+    return () => {
+      targets.forEach((el) => {
+        el.inert = false
+      })
+    }
+  }, [open])
+
   const item = open === null ? null : gallery[open]
 
   return (
@@ -112,13 +151,16 @@ export default function Gallery() {
               className="group shrink-0 snap-center text-left transition-transform duration-150 ease-out-strong active:translate-y-[2px]"
             >
               <span className="block h-[52vh] w-[76vw] overflow-hidden bg-void-2 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]">
-                <img
-                  src={photo.src}
-                  alt={photo.alt}
-                  loading="lazy"
-                  onLoad={remeasure}
-                  className="h-full w-full object-cover grayscale contrast-125 transition-transform duration-200 ease-out-strong can-hover:group-hover:scale-105"
-                />
+                <picture>
+                  <source srcSet={photo.webp} type="image/webp" />
+                  <img
+                    src={photo.src}
+                    alt={photo.alt}
+                    loading="lazy"
+                    onLoad={remeasure}
+                    className="h-full w-full object-cover grayscale contrast-125 transition-transform duration-200 ease-out-strong can-hover:group-hover:scale-105"
+                  />
+                </picture>
               </span>
 
               {/* Pie de lámina fuera del encuadre, no superpuesto: una etiqueta
@@ -136,11 +178,9 @@ export default function Gallery() {
 
           {/* Última lámina: cierra la tira y lleva al perfil. */}
           <a
-            href={business.social.instagram}
-            target="_blank"
-            rel="noreferrer"
+            href="#"
             onClick={handleInstagramClick}
-            className="group flex h-[52vh] w-[76vw] shrink-0 snap-center flex-col justify-between bg-chalk p-6 text-void transition-opacity duration-150 hover:opacity-80 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]"
+            className="group flex h-[52vh] w-[76vw] shrink-0 snap-center flex-col justify-between bg-chalk p-6 text-void transition-opacity duration-150 can-hover:hover:opacity-80 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]"
           >
             <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-void/60">
               Más trabajos
@@ -169,40 +209,46 @@ export default function Gallery() {
         de un contenedor que GSAP está trasladando, y salta. Además un modal no
         está anclado a un disparador concreto, así que centrado es lo correcto.
       */}
-      <AnimatePresence>
-        {item && (
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-label={item.alt}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.18, ease: EASE }}
-            onClick={() => setOpen(null)}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-void p-4 md:p-12"
-          >
-            <motion.img
-              src={item.src}
-              alt={item.alt}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.97 }}
-              transition={{ duration: reduced ? 0 : 0.22, ease: EASE }}
-              onClick={(event) => event.stopPropagation()}
-              className="max-h-full max-w-full object-contain"
-            />
-            <button
-              type="button"
+      {createPortal(
+        <AnimatePresence>
+          {item && (
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={item.alt}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: reduced ? 0 : 0.18, ease: EASE }}
               onClick={() => setOpen(null)}
-              aria-label="Cerrar"
-              className="absolute right-4 top-4 bg-chalk px-4 py-2 font-mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-void transition-transform duration-150 ease-out-strong active:translate-y-[2px] md:right-10 md:top-10"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-void p-4 md:p-12"
             >
-              Cerrar
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <picture onClick={(event) => event.stopPropagation()}>
+                <source srcSet={item.webp} type="image/webp" />
+                <motion.img
+                  src={item.src}
+                  alt={item.alt}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ duration: reduced ? 0 : 0.22, ease: EASE }}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </picture>
+              <button
+                ref={closeBtnRef}
+                type="button"
+                onClick={() => setOpen(null)}
+                aria-label="Cerrar"
+                className="absolute right-4 top-4 flex h-11 items-center justify-center bg-chalk px-5 font-mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-void transition-transform duration-150 ease-out-strong active:translate-y-[2px] md:right-10 md:top-10"
+              >
+                Cerrar
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </section>
   )
 }

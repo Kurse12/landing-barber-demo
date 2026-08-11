@@ -9,7 +9,7 @@ import SectionHeading from './ui/SectionHeading'
 const PREVIEW_W = 240
 const PREVIEW_H = 300
 
-export default function Services() {
+export default function Services({ onSelectService }) {
   const root = useRef(null)
   const reduced = useReducedMotionPolicy()
   const [canHover, setCanHover] = useState(false)
@@ -111,30 +111,30 @@ export default function Services() {
           <li key={service.id} data-service-row>
             <a
               href="#reserva"
-              onClick={handleAnchorClick('reserva')}
+              onClick={handleAnchorClick('reserva', () => onSelectService(service.id))}
               onPointerEnter={showPreview ? () => setActive(service.id) : undefined}
               onFocus={() => setActive(service.id)}
               onBlur={() => setActive(null)}
-              className="group -mx-4 grid grid-cols-[2.5rem_1fr] items-baseline gap-x-2 px-4 py-8 transition-colors duration-150 hover:bg-chalk hover:text-void md:-mx-6 md:grid-cols-[4rem_1fr_6rem_10rem] md:gap-x-6 md:px-6 md:py-9"
+              className="group -mx-4 grid grid-cols-[2.5rem_1fr] items-baseline gap-x-2 px-4 py-8 transition-colors duration-150 can-hover:hover:bg-chalk can-hover:hover:text-void md:-mx-6 md:grid-cols-[4rem_1fr_6rem_10rem] md:gap-x-6 md:px-6 md:py-9"
             >
               {/* El número no es una etiqueta decorativa: es el índice de una
                   carta de precios, que es como se numeran las cartas. */}
-              <span className="font-mono text-xs tabular-nums text-chalk-2 group-hover:text-void/50">
+              <span className="font-mono text-xs tabular-nums text-chalk-2 can-hover:group-hover:text-void/70">
                 {String(i + 1).padStart(2, '0')}
               </span>
 
               <span className="flex flex-col">
                 <span className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-                  <h3 className="text-big text-chalk group-hover:text-void">
+                  <h3 className="text-big text-chalk can-hover:group-hover:text-void">
                     {service.name}
                   </h3>
                   {service.featured && (
-                    <span className="border-2 border-chalk px-2 py-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em] text-chalk group-hover:border-void group-hover:text-void">
+                    <span className="border-2 border-chalk px-2 py-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em] text-chalk can-hover:group-hover:border-void can-hover:group-hover:text-void">
                       Más pedido
                     </span>
                   )}
                 </span>
-                <p className="mt-3 max-w-md text-sm leading-relaxed text-chalk-2 group-hover:text-void/70">
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-chalk-2 can-hover:group-hover:text-void/70">
                   {service.description}
                 </p>
 
@@ -146,28 +146,31 @@ export default function Services() {
                   para un dedo.
                 */}
                 <span className="mt-6 flex items-center gap-5 md:hidden">
-                  <img
-                    src={service.preview}
-                    alt=""
-                    loading="lazy"
-                    className="h-20 w-16 shrink-0 object-cover grayscale contrast-125"
-                  />
+                  <picture>
+                    <source srcSet={service.previewWebp} type="image/webp" />
+                    <img
+                      src={service.preview}
+                      alt=""
+                      loading="lazy"
+                      className="h-20 w-16 shrink-0 object-cover grayscale contrast-125"
+                    />
+                  </picture>
                   <span className="flex flex-col gap-1 font-mono">
-                    <span className="text-xs tabular-nums text-chalk-2 group-hover:text-void/50">
+                    <span className="text-xs tabular-nums text-chalk-2 can-hover:group-hover:text-void/70">
                       {service.duration} min
                     </span>
-                    <span className="text-3xl font-bold tabular-nums text-chalk group-hover:text-void">
+                    <span className="text-3xl font-bold tabular-nums text-chalk can-hover:group-hover:text-void">
                       {formatPrice(service.price)}
                     </span>
                   </span>
                 </span>
               </span>
 
-              <span className="hidden font-mono text-xs tabular-nums text-chalk-2 group-hover:text-void/50 md:block">
+              <span className="hidden font-mono text-xs tabular-nums text-chalk-2 can-hover:group-hover:text-void/70 md:block">
                 {service.duration} min
               </span>
 
-              <span className="hidden text-right font-mono text-3xl font-bold tabular-nums text-chalk group-hover:text-void md:block">
+              <span className="hidden text-right font-mono text-3xl font-bold tabular-nums text-chalk can-hover:group-hover:text-void md:block">
                 {formatPrice(service.price)}
               </span>
             </a>
@@ -193,11 +196,14 @@ export default function Services() {
                 transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
                 className="h-full w-full overflow-hidden bg-void-2"
               >
-                <img
-                  src={activeService.preview}
-                  alt=""
-                  className="h-full w-full object-cover grayscale contrast-125"
-                />
+                <picture>
+                  <source srcSet={activeService.previewWebp} type="image/webp" />
+                  <img
+                    src={activeService.preview}
+                    alt=""
+                    className="h-full w-full object-cover grayscale contrast-125"
+                  />
+                </picture>
               </motion.div>
             )}
           </AnimatePresence>
