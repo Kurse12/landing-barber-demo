@@ -1,15 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { gsap, useGSAP, motionSafe } from '../lib/gsap'
 import { business, nav } from '../data/site'
 import { handleAnchorClick } from '../lib/scroll'
 import { showDemoToast } from '../lib/demoToast'
 import Reveal from './ui/Reveal'
-
-// Cuánto se pasa el wordmark del ancho disponible antes de que el borde del
-// contenedor lo recorte: lo suficiente para leerse como "el cartel es más
-// grande que el papel" (DESIGN.md s5), no tanto como para perder la mitad
-// del nombre. 1 sería ancho exacto, sin sangrado.
-const WORDMARK_BLEED = 1.08
 
 // `dest` lleva su propia preposición y artículo: "al Instagram del negocio"
 // no se arma igual que "a Facebook del negocio", y es la misma cuenta que
@@ -39,48 +33,6 @@ const handleContactClick = (dest) => () => {
 
 export default function Footer() {
   const root = useRef(null)
-  const mark = useRef(null)
-
-  /*
-    `text-[19vw]` a secas asumía un nombre corto: con "Barbería Clásica" el
-    ancho real supera dos veces el viewport y el `overflow-hidden` del padre
-    se come la mitad de la palabra en vez de solo la cola. Se mide igual que
-    en `usePosterFit` (cuerpo de referencia, ancho real, regla de tres) para
-    que el sangrado sea el mismo recorte contenido sea cual sea el nombre.
-  */
-  useEffect(() => {
-    const el = mark.current
-    if (!el) return
-
-    let frame = 0
-    let cancelled = false
-
-    const fit = () => {
-      const available = el.clientWidth
-      if (!available) return
-      el.style.fontSize = '100px'
-      const measured = el.scrollWidth
-      if (!measured) return
-      el.style.fontSize = `${(available * WORDMARK_BLEED * 100) / measured}px`
-    }
-
-    document.fonts.ready.then(() => {
-      if (!cancelled) fit()
-    })
-    fit()
-
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(fit)
-    })
-    observer.observe(el)
-
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(frame)
-      observer.disconnect()
-    }
-  }, [])
 
   useGSAP(
     () => {
@@ -197,14 +149,14 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Wordmark a sangre, recortado por los bordes de la página: el cartel
-          es más grande que el papel. */}
+      {/* Wordmark de cierre: contenido dentro del ancho disponible, sin sangrado
+          ni medición JS. La regla superior reutiliza `section-rule`, el mismo
+          trazo que abre cada bloque del sistema. */}
       <div data-footer-mark-box className="overflow-hidden px-4 pb-6 md:px-6">
         <p
-          ref={mark}
           data-footer-mark
           aria-hidden="true"
-          className="block w-max whitespace-nowrap font-display text-[14vw] uppercase leading-[0.8] tracking-[-0.05em] text-chalk"
+          className="section-rule block w-full pt-3 font-display text-[clamp(2.5rem,9vw,4.5rem)] uppercase leading-[0.9] tracking-[-0.025em] text-chalk"
         >
           {business.name}
         </p>
