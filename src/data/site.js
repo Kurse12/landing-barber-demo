@@ -39,7 +39,7 @@ export const images = {
 // a propósito. No representan un negocio real, así que no llevan una marca
 // distintiva ni datos que puedan leerse como reales.
 export const business = {
-  name: 'Barbería Clásica',
+  name: 'Barbería',
   tagline: 'Barbería de barrio, corte de toda la vida',
   /*
     El titular va servido línea por línea, no como una frase que el navegador

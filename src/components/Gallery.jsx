@@ -9,11 +9,11 @@ import SectionHeading from './ui/SectionHeading'
 
 const EASE = [0.23, 1, 0.32, 1]
 
-// Demo: el enlace no lleva a ningún perfil real, avisa por qué. Sin `href`
-// real detrás (ver la lámina más abajo): así no hay URL que un click medio o
-// "abrir en pestaña nueva" puedan seguir sin pasar por el aviso.
-const handleInstagramClick = (event) => {
-  event.preventDefault()
+// Demo: el botón no lleva a ningún perfil real, avisa por qué. Es un
+// <button>, no un <a href="#"> (ver la lámina más abajo): sin `href` real
+// detrás no hay URL que un clic derecho o el clic del medio puedan seguir
+// sin pasar por el aviso.
+const handleInstagramClick = () => {
   showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al Instagram del negocio.')
 }
 
@@ -177,10 +177,10 @@ export default function Gallery() {
           ))}
 
           {/* Última lámina: cierra la tira y lleva al perfil. */}
-          <a
-            href="#"
+          <button
+            type="button"
             onClick={handleInstagramClick}
-            className="group flex h-[52vh] w-[76vw] shrink-0 snap-center flex-col justify-between bg-chalk p-6 text-void transition-opacity duration-150 can-hover:hover:opacity-80 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]"
+            className="group flex h-[52vh] w-[76vw] shrink-0 snap-center flex-col justify-between bg-chalk p-6 text-left text-void transition-opacity duration-150 can-hover:hover:opacity-80 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]"
           >
             <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-void/60">
               Más trabajos
@@ -199,7 +199,7 @@ export default function Gallery() {
                 </span>
               </span>
             </span>
-          </a>
+          </button>
         </div>
       </div>
 

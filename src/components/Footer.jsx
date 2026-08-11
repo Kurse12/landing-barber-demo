@@ -1,9 +1,15 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { gsap, useGSAP, motionSafe } from '../lib/gsap'
 import { business, nav } from '../data/site'
 import { handleAnchorClick } from '../lib/scroll'
 import { showDemoToast } from '../lib/demoToast'
 import Reveal from './ui/Reveal'
+
+// Cuánto se pasa el wordmark del ancho disponible antes de que el borde del
+// contenedor lo recorte: lo suficiente para leerse como "el cartel es más
+// grande que el papel" (DESIGN.md s5), no tanto como para perder la mitad
+// del nombre. 1 sería ancho exacto, sin sangrado.
+const WORDMARK_BLEED = 1.08
 
 // `dest` lleva su propia preposición y artículo: "al Instagram del negocio"
 // no se arma igual que "a Facebook del negocio", y es la misma cuenta que
@@ -11,30 +17,70 @@ import Reveal from './ui/Reveal'
 // mismo destino de dos maneras distintas según la sección.
 //
 // `href` guarda el destino real solo como dato (lo que enlazaría un sitio de
-// verdad); ningún elemento interactivo lo usa como atributo `href`, así que
-// no hay URL real detrás del enlace que un click medio o "abrir en pestaña
-// nueva" puedan seguir sin pasar por el aviso.
+// verdad); los controles de abajo son <button>, no <a>, así que no hay URL
+// real detrás que un clic derecho ("abrir en pestaña nueva"), un clic del
+// medio o arrastrar el enlace puedan seguir sin pasar por el aviso.
 const socials = [
   { id: 'ig', label: 'Instagram', dest: 'al Instagram del negocio', href: business.social.instagram },
   { id: 'fb', label: 'Facebook', dest: 'a Facebook del negocio', href: business.social.facebook },
   { id: 'tt', label: 'TikTok', dest: 'a TikTok del negocio', href: business.social.tiktok },
 ]
 
-// Demo: el enlace no navega a ningún perfil real, avisa por qué.
-const handleSocialClick = (dest) => (event) => {
-  event.preventDefault()
+// Demo: el botón no navega a ningún perfil real, avisa por qué.
+const handleSocialClick = (dest) => () => {
   showDemoToast(`Esto es una demo: en un sitio real este enlace llevaría ${dest}.`)
 }
 
-// Mismo trato que los links sociales: el aviso, no el marcado real, es lo
-// único que existe detrás del clic.
-const handleContactClick = (dest) => (event) => {
-  event.preventDefault()
+// Mismo trato que los sociales: el aviso, no el marcado real, es lo único
+// que existe detrás del clic.
+const handleContactClick = (dest) => () => {
   showDemoToast(`Esto es una demo: en un sitio real este enlace ${dest}.`)
 }
 
 export default function Footer() {
   const root = useRef(null)
+  const mark = useRef(null)
+
+  /*
+    `text-[19vw]` a secas asumía un nombre corto: con "Barbería Clásica" el
+    ancho real supera dos veces el viewport y el `overflow-hidden` del padre
+    se come la mitad de la palabra en vez de solo la cola. Se mide igual que
+    en `usePosterFit` (cuerpo de referencia, ancho real, regla de tres) para
+    que el sangrado sea el mismo recorte contenido sea cual sea el nombre.
+  */
+  useEffect(() => {
+    const el = mark.current
+    if (!el) return
+
+    let frame = 0
+    let cancelled = false
+
+    const fit = () => {
+      const available = el.clientWidth
+      if (!available) return
+      el.style.fontSize = '100px'
+      const measured = el.scrollWidth
+      if (!measured) return
+      el.style.fontSize = `${(available * WORDMARK_BLEED * 100) / measured}px`
+    }
+
+    document.fonts.ready.then(() => {
+      if (!cancelled) fit()
+    })
+    fit()
+
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(fit)
+    })
+    observer.observe(el)
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [])
 
   useGSAP(
     () => {
@@ -99,20 +145,20 @@ export default function Footer() {
         <div>
           <p className="label">Contacto</p>
           <p className="mt-3 flex flex-col font-mono text-sm">
-            <a
-              href="#"
+            <button
+              type="button"
               onClick={handleContactClick('abriría el teléfono para llamar')}
-              className="w-fit py-1.5 text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
+              className="w-fit py-1.5 text-left text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
             >
               {business.phone}
-            </a>
-            <a
-              href="#"
+            </button>
+            <button
+              type="button"
               onClick={handleContactClick('abriría el correo para escribir')}
-              className="w-fit py-1.5 text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
+              className="w-fit py-1.5 text-left text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
             >
               {business.email}
-            </a>
+            </button>
           </p>
         </div>
 
@@ -135,16 +181,16 @@ export default function Footer() {
 
         <div>
           <p className="label">Seguinos</p>
-          <ul className="mt-3 flex flex-col text-sm [&_a]:w-fit [&_a]:py-1.5">
+          <ul className="mt-3 flex flex-col text-sm [&_button]:w-fit [&_button]:py-1.5">
             {socials.map((social) => (
               <li key={social.id}>
-                <a
-                  href="#"
+                <button
+                  type="button"
                   onClick={handleSocialClick(social.dest)}
-                  className="text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
+                  className="text-left text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
                 >
                   {social.label}
-                </a>
+                </button>
               </li>
             ))}
           </ul>
@@ -155,9 +201,10 @@ export default function Footer() {
           es más grande que el papel. */}
       <div data-footer-mark-box className="overflow-hidden px-4 pb-6 md:px-6">
         <p
+          ref={mark}
           data-footer-mark
           aria-hidden="true"
-          className="block whitespace-nowrap font-display text-[19vw] uppercase leading-[0.8] tracking-[-0.05em] text-chalk"
+          className="block whitespace-nowrap font-display text-[14vw] uppercase leading-[0.8] tracking-[-0.05em] text-chalk"
         >
           {business.name}
         </p>
@@ -177,18 +224,19 @@ export default function Footer() {
           {['Términos', 'Privacidad', 'Cookies'].map((label) => (
             <li key={label}>
               {/* Sin página real detrás: mismo aviso de demo que el resto de
-                  los enlaces que no navegan a ningún lado. Un `href="#"` sin
-                  manejar saltaría al tope de la página sin avisar por qué. */}
-              <a
-                href="#"
-                onClick={(event) => {
-                  event.preventDefault()
+                  los controles que no navegan a ningún lado. <button>, no
+                  <a href="#">: un `href` real es un destino que un clic
+                  derecho o el clic del medio pueden seguir sin pasar por el
+                  aviso. */}
+              <button
+                type="button"
+                onClick={() => {
                   showDemoToast(`Esto es una demo: en un sitio real este enlace llevaría a la página de ${label}.`)
                 }}
                 className="transition-colors duration-150 can-hover:hover:text-chalk"
               >
                 {label}
-              </a>
+              </button>
             </li>
           ))}
         </ul>

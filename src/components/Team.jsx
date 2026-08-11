@@ -4,22 +4,18 @@ import { team } from '../data/site'
 import { showDemoToast } from '../lib/demoToast'
 import SectionHeading from './ui/SectionHeading'
 
-// Demo: el enlace no lleva a ningún perfil real, avisa por qué. Cada barbero
+// Demo: el botón no lleva a ningún perfil real, avisa por qué. Cada barbero
 // tiene su propio Instagram (no uno compartido), así que el aviso nombra a
 // quién correspondía: decir solo "del barbero" borraría esa diferencia entre
 // las tres filas y el aviso mentiría por omisión sobre a dónde iba cada una.
 //
-// El `href` real de cada barbero vive solo en `member.instagram` (dato), no
-// en el atributo `href` del enlace: así no queda una URL real detrás del
-// clic que un click medio o "abrir en pestaña nueva" puedan seguir.
-const handleInstagramClick = (name) => (event) => {
-  event.preventDefault()
+// El `href` real de cada barbero vive solo en `member.instagram` (dato). Es
+// un <button>, no un <a href="#">: sin `href` real en el elemento, no queda
+// una URL detrás del clic que un clic derecho o el clic del medio puedan
+// seguir sin pasar por el aviso.
+const handleInstagramClick = (name) => () => {
   showDemoToast(`Esto es una demo: en un sitio real este enlace llevaría al Instagram de ${name}.`)
 }
-
-// Profundidad de parallax por retrato. Que no sean iguales es lo que separa los
-// planos ahora que no hay celdas dibujadas que los separen.
-const DEPTHS = [8, 16, 11]
 
 export default function Team() {
   const root = useRef(null)
@@ -28,24 +24,6 @@ export default function Team() {
     () => {
       const mm = motionSafe(() => {
         gsap.utils.toArray('[data-member-frame]').forEach((frame) => {
-          const photo = frame.querySelector('[data-member-photo]')
-          const depth = Number(frame.dataset.depth) || 10
-
-          gsap.fromTo(
-            photo,
-            { yPercent: depth },
-            {
-              yPercent: -depth,
-              ease: 'none',
-              scrollTrigger: {
-                trigger: frame,
-                start: 'top bottom',
-                end: 'bottom top',
-                scrub: true,
-              },
-            },
-          )
-
           gsap.fromTo(
             frame,
             { clipPath: 'inset(0% 0% 100% 0%)' },
@@ -74,16 +52,15 @@ export default function Team() {
         />
 
         <ul className="mt-20 grid grid-cols-1 gap-16 md:grid-cols-3 md:gap-8">
-          {team.map((member, i) => (
+          {team.map((member) => (
             <li key={member.id}>
-              <a
-                href="#"
+              <button
+                type="button"
                 onClick={handleInstagramClick(member.name)}
-                className="group block"
+                className="group block text-left"
               >
                 <div
                   data-member-frame
-                  data-depth={DEPTHS[i] ?? 10}
                   className="relative aspect-[4/5] overflow-hidden bg-void-2"
                 >
                   {member.photo ? (
@@ -96,9 +73,8 @@ export default function Team() {
                         loading="lazy"
                         /* En un sistema monocromo el hover no puede virar a color,
                            así que lo que cambia es el rango: la foto se aclara y
-                           se despega del fondo. Solo `filter`, sin tocar el
-                           transform, que lo está escribiendo el parallax. */
-                        className="absolute inset-0 h-full w-full scale-115 object-cover grayscale contrast-125 transition-[filter] duration-200 ease-out-strong can-hover:group-hover:brightness-125 can-hover:group-hover:contrast-100 will-change-transform"
+                           se despega del fondo. */
+                        className="absolute inset-0 h-full w-full scale-115 object-cover grayscale contrast-125 transition-[filter] duration-200 ease-out-strong can-hover:group-hover:brightness-125 can-hover:group-hover:contrast-100"
                       />
                     </picture>
                   ) : (
@@ -123,7 +99,7 @@ export default function Team() {
                     &rarr;
                   </span>
                 </span>
-              </a>
+              </button>
             </li>
           ))}
         </ul>

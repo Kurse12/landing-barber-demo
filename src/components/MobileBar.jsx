@@ -5,10 +5,10 @@ import { handleAnchorClick } from '../lib/scroll'
 import { showDemoToast } from '../lib/demoToast'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
 
-// Mismo aviso de demo que el resto de los enlaces de contacto: sin `href`
-// real de teléfono detrás del clic.
-const handleCallClick = (event) => {
-  event.preventDefault()
+// Mismo aviso de demo que el resto de los controles de contacto. Es un
+// <button>, no un <a href="#">: sin `href` real detrás, un clic derecho o el
+// clic del medio no tienen destino que seguir saltándose el aviso.
+const handleCallClick = () => {
   showDemoToast('Esto es una demo: en un sitio real este enlace abriría el teléfono para llamar.')
 }
 
@@ -74,13 +74,13 @@ export default function MobileBar() {
           >
             Sacar turno
           </a>
-          <a
-            href="#"
+          <button
+            type="button"
             onClick={handleCallClick}
             className="flex items-center justify-center px-8 py-5 font-mono text-sm font-bold uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 active:opacity-50"
           >
             Llamar
-          </a>
+          </button>
         </motion.div>
       )}
     </AnimatePresence>

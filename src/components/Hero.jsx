@@ -101,7 +101,7 @@ export default function Hero() {
             sea que en un teléfono no aparecía en absoluto y quedaba un hueco
             negro donde debía estar.
           */}
-          <span className="mt-3 flex flex-col gap-5 sm:mt-0 sm:flex-row sm:items-stretch sm:gap-8">
+          <span className="mt-3 flex flex-col gap-5 sm:mt-0 sm:flex-row sm:items-end sm:gap-8">
             {/* shrink-0: en la fila de escritorio, sin esto flexbox encogería
                 la caja por debajo del ancho al que se acaba de ajustar. */}
             <span className="block shrink-0 overflow-hidden">
@@ -114,9 +114,12 @@ export default function Hero() {
               </span>
             </span>
 
+            {/* Altura propia en vh: si dependiera de la fila (h-auto) queda
+                atada al tamaño de "LA VIDA", que la aplasta en una tira
+                demasiado baja y recorta los espejos por arriba y abajo. */}
             <span
               data-hero-strip
-              className="relative block h-[26vh] overflow-hidden sm:h-auto sm:flex-1"
+              className="relative block h-[26vh] overflow-hidden sm:h-[34vh] sm:flex-1"
             >
               <picture>
                 <source srcSet={images.hero.webp} type="image/webp" />
@@ -137,7 +140,7 @@ export default function Hero() {
         Pie del cartel. La regla de arriba lo cierra contra el titular; entre
         las tres celdas ya no hay líneas, las separa el aire.
       */}
-      <div className="grid grid-cols-1 gap-8 border-t-2 border-chalk px-4 py-8 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-12 md:px-6">
+      <div className="flex flex-col gap-8 border-t-2 border-chalk px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:gap-12 md:px-6">
         <p data-hero-cell className="max-w-sm font-sans text-lg leading-snug text-chalk">
           {business.claim.tail}
         </p>

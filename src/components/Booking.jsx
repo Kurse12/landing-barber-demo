@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { business, formatPrice, schedule, services, team } from '../data/site'
+import { business, formatPrice, schedule, services, stats, team } from '../data/site'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
 import { showDemoToast } from '../lib/demoToast'
 import Button from './ui/Button'
@@ -8,6 +8,28 @@ import Reveal from './ui/Reveal'
 import SectionHeading from './ui/SectionHeading'
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+// "Lunes y domingo", o "lunes, martes y domingo" si algún día se suma a la
+// lista de cierres. Se calcula una sola vez desde el mismo dato que pinta la
+// columna "Horario": no hay dos fuentes de verdad sobre qué día se cierra.
+function formatClosedDays(days) {
+  if (days.length === 0) return ''
+  if (days.length === 1) return days[0]
+  return `${days.slice(0, -1).join(', ')} y ${days[days.length - 1]}`
+}
+
+const CLOSED_DAYS_LABEL = formatClosedDays(
+  schedule.filter((row) => row.hours === 'Cerrado').map((row) => row.day.toLowerCase())
+)
+
+// Mismas cifras que ya generaron confianza en "La casa", resurgidas acá:
+// quien llega hasta el botón de enviar es quien más las necesita, y ahí
+// arriba quedaron a varias pantallas de distancia. Mismo formato `es-AR`
+// que usa esa sección, para no decir "22" de un lado y "22,0" del otro.
+const YEARS_STAT = stats.find((stat) => stat.id === 's2')
+const RATING_STAT = stats.find((stat) => stat.id === 's3')
+const formatStat = (value, decimals) =>
+  value.toLocaleString('es-AR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 
 const emptyForm = {
   name: '',
@@ -201,6 +223,16 @@ export default function Booking({ selectedService }) {
               de delante. */}
           <p className="label">Formulario de demostración, no se envía a ningún lado real</p>
           <p className="label mt-2">Campos con * son obligatorios</p>
+          {/* P1: antes vivía solo en la columna de horarios, que en móvil
+              cae después de todo el formulario (grid a una columna bajo
+              1024px). Quien completaba el día ahí no se enteraba de qué día
+              cerramos hasta el error al enviar. Va acá, antes del campo, y
+              además queda enlazado al input por aria-describedby más abajo. */}
+          {CLOSED_DAYS_LABEL && (
+            <p id="closed-days-hint" className="label mt-2">
+              Cerramos {CLOSED_DAYS_LABEL}
+            </p>
+          )}
           {/*
             Dos grupos, no siete campos sueltos: "Vos" (quién sos) y "Turno"
             (qué querés y cuándo). El <fieldset> es la agrupación semántica
@@ -251,70 +283,87 @@ export default function Booking({ selectedService }) {
 
             <fieldset className="m-0 min-w-0 border-0 p-0">
               <legend className="label mb-7 block w-full p-0">Turno</legend>
-              <div className="grid gap-7 sm:grid-cols-2">
-                <Field id="service" label="Servicio">
-                  <select
-                    id="service"
-                    className={fieldClass('service')}
-                    value={form.service}
-                    onChange={update('service')}
-                  >
-                    {services.map((service) => (
-                      <option key={service.id} value={service.id}>
-                        {service.name} ({formatPrice(service.price)})
-                      </option>
-                    ))}
-                  </select>
-                </Field>
 
-                <Field id="barber" label="Barbero">
-                  <select
-                    id="barber"
-                    className={fieldClass('barber')}
-                    value={form.barber}
-                    onChange={update('barber')}
-                  >
-                    <option value="cualquiera">El que esté libre</option>
-                    {team.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+              {/* "Qué" y "Cuándo" son dos decisiones distintas, no cuatro
+                  campos sueltos: primero el servicio y con quién, después el
+                  día y la hora. Fieldsets anidados son HTML válido y un
+                  lector de pantalla los anuncia encadenados ("Turno, Qué,
+                  Servicio"), así que el agrupamiento no se pierde, se precisa. */}
+              <div className="flex flex-col gap-10">
+                <fieldset className="m-0 min-w-0 border-0 p-0">
+                  <legend className="label mb-4 block w-full p-0">Qué</legend>
+                  <div className="grid gap-7 sm:grid-cols-2">
+                    <Field id="service" label="Servicio">
+                      <select
+                        id="service"
+                        className={fieldClass('service')}
+                        value={form.service}
+                        onChange={update('service')}
+                      >
+                        {services.map((service) => (
+                          <option key={service.id} value={service.id}>
+                            {service.name} ({formatPrice(service.price)})
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
 
-                <Field id="date" label="Día" required error={errors.date}>
-                  <input
-                    id="date"
-                    type="date"
-                    min={minDate}
-                    required
-                    aria-invalid={Boolean(errors.date)}
-                    aria-describedby={errors.date ? 'date-error' : undefined}
-                    className={`${fieldClass('date')} [color-scheme:dark]`}
-                    value={form.date}
-                    onChange={update('date')}
-                  />
-                </Field>
+                    <Field id="barber" label="Barbero">
+                      <select
+                        id="barber"
+                        className={fieldClass('barber')}
+                        value={form.barber}
+                        onChange={update('barber')}
+                      >
+                        <option value="cualquiera">El que esté libre</option>
+                        {team.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                </fieldset>
 
-                <Field id="time" label="Hora" required error={errors.time}>
-                  <input
-                    id="time"
-                    type="time"
-                    required
-                    aria-invalid={Boolean(errors.time)}
-                    aria-describedby={errors.time ? 'time-error' : undefined}
-                    className={`${fieldClass('time')} [color-scheme:dark]`}
-                    value={form.time}
-                    onChange={update('time')}
-                  />
-                </Field>
+                <fieldset className="m-0 min-w-0 border-0 p-0">
+                  <legend className="label mb-4 block w-full p-0">Cuándo</legend>
+                  <div className="grid gap-7 sm:grid-cols-2">
+                    <Field id="date" label="Día" required error={errors.date}>
+                      <input
+                        id="date"
+                        type="date"
+                        min={minDate}
+                        required
+                        aria-invalid={Boolean(errors.date)}
+                        aria-describedby={errors.date ? 'date-error closed-days-hint' : 'closed-days-hint'}
+                        className={`${fieldClass('date')} [color-scheme:dark]`}
+                        value={form.date}
+                        onChange={update('date')}
+                      />
+                    </Field>
 
-                <Field
-                  id="notes"
-                  label="Algo que debamos saber (opcional)"
-                  className="sm:col-span-2"
-                >
+                    <Field id="time" label="Hora" required error={errors.time}>
+                      <input
+                        id="time"
+                        type="time"
+                        required
+                        aria-invalid={Boolean(errors.time)}
+                        aria-describedby={errors.time ? 'time-error' : undefined}
+                        className={`${fieldClass('time')} [color-scheme:dark]`}
+                        value={form.time}
+                        onChange={update('time')}
+                      />
+                    </Field>
+                  </div>
+                </fieldset>
+              </div>
+
+              {/* Ni "qué" ni "cuándo": una nota libre no pertenece a
+                  ninguna de las dos preguntas, así que queda fuera de ambos
+                  subgrupos en vez de forzarla en uno. */}
+              <div className="mt-10">
+                <Field id="notes" label="Algo que debamos saber (opcional)">
                   <textarea
                     id="notes"
                     rows="3"
@@ -345,6 +394,24 @@ export default function Booking({ selectedService }) {
                   {status === 'sending' ? 'Enviando' : 'Enviar solicitud'}
                 </motion.span>
               </Button>
+
+              {/* Justo antes de mandar sus datos es cuando un primerizo más
+                  se pregunta si esto vale la pena y qué pasa si algo cambia.
+                  Una cifra que ya probó su valor arriba y una respuesta a esa
+                  segunda pregunta, las dos a mano en el mismo momento. */}
+              {YEARS_STAT && RATING_STAT && (
+                <p className="mt-5 font-mono text-xs tabular-nums text-chalk-2">
+                  <span className="text-chalk">{formatStat(YEARS_STAT.to, YEARS_STAT.decimals)}</span>{' '}
+                  {YEARS_STAT.label}
+                  <span aria-hidden="true"> · </span>
+                  <span className="text-chalk">{formatStat(RATING_STAT.to, RATING_STAT.decimals)}</span>{' '}
+                  {RATING_STAT.label}
+                </p>
+              )}
+              <p className="mt-3 max-w-sm text-sm leading-relaxed text-chalk-2">
+                Confirmamos por WhatsApp el mismo día. Si no podés venir, avisanos
+                y reprogramamos sin cargo.
+              </p>
             </div>
 
             <AnimatePresence>
@@ -397,45 +464,46 @@ export default function Booking({ selectedService }) {
 
           <h3 className="label mt-12">Dónde estamos</h3>
           <p className="mt-4 text-sm text-chalk-2">{business.address}</p>
-          {/* Sin `href` real detrás: un click medio o "abrir en pestaña
-              nueva" no tienen destino que seguir, solo el propio aviso. */}
-          <a
-            href="#"
-            onClick={(event) => {
-              event.preventDefault()
+          {/* <button>, no <a href="#">: un href real, aunque apunte a la
+              propia página, es un destino que el clic derecho ("abrir en
+              pestaña nueva"), el clic del medio o arrastrar el enlace pueden
+              seguir sin pasar por el `onClick` y, con él, sin el aviso de
+              demo. Un botón no tiene esos caminos alternativos. */}
+          <button
+            type="button"
+            onClick={() => {
               showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al mapa del negocio.')
             }}
             className="mt-3 inline-block border-b-2 border-chalk py-1 font-mono text-xs uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
           >
             Ver en Google Maps
-          </a>
+          </button>
 
           <h3 className="label mt-12">Contacto directo</h3>
-          {/* py-2 en los enlaces: en móvil son el objetivo táctil principal de
+          {/* py-2 en los botones: en móvil son el objetivo táctil principal de
               esta columna y con solo la altura de línea se quedan en 20px.
-              Mismo trato de demo que el resto de los enlaces de la página:
-              sin `href` real de teléfono o correo detrás del clic. */}
+              <button>, no <a href="#">: sin un `href` real detrás no hay
+              destino que un clic derecho, el clic del medio o arrastrar el
+              enlace puedan seguir saltándose el aviso de demo. */}
           <p className="mt-2 flex flex-col font-mono text-sm">
-            <a
-              href="#"
-              onClick={(event) => {
-                event.preventDefault()
+            <button
+              type="button"
+              onClick={() => {
                 showDemoToast('Esto es una demo: en un sitio real este enlace abriría el teléfono para llamar.')
               }}
-              className="w-fit py-2 text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
+              className="w-fit py-2 text-left text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
             >
               {business.phone}
-            </a>
-            <a
-              href="#"
-              onClick={(event) => {
-                event.preventDefault()
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 showDemoToast('Esto es una demo: en un sitio real este enlace abriría el correo para escribir.')
               }}
-              className="w-fit py-2 text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
+              className="w-fit py-2 text-left text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
             >
               {business.email}
-            </a>
+            </button>
           </p>
         </Reveal>
       </div>

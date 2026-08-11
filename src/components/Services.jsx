@@ -4,10 +4,17 @@ import { gsap, useGSAP, motionSafe } from '../lib/gsap'
 import { formatPrice, services } from '../data/site'
 import { handleAnchorClick } from '../lib/scroll'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
+import Reveal from './ui/Reveal'
 import SectionHeading from './ui/SectionHeading'
 
 const PREVIEW_W = 240
 const PREVIEW_H = 300
+
+// Seis servicios con una sola línea de descripción y una sola insignia
+// ("Más pedido") superan lo que se decide de un vistazo. Repetir esa misma
+// señal acá, antes de que arranque la lista, le da al primerizo un punto de
+// partida sin tener que leer las seis filas para encontrar la marcada.
+const featuredService = services.find((service) => service.featured)
 
 export default function Services({ onSelectService }) {
   const root = useRef(null)
@@ -74,6 +81,12 @@ export default function Services({ onSelectService }) {
           meta={`${services.length} servicios`}
           subtitle="Precios cerrados y tiempos reales. Lo que ves es lo que pagás."
         />
+        {featuredService && (
+          <Reveal as="p" delay={0.14} className="mt-6 max-w-xl text-sm leading-relaxed text-chalk-2">
+            ¿Primera vez acá? Arrancá por{' '}
+            <span className="text-chalk">{featuredService.name}</span>, el más pedido de la casa.
+          </Reveal>
+        )}
       </div>
 
       {/*
