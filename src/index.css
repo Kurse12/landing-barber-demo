@@ -1,37 +1,67 @@
 @import 'tailwindcss';
 
 /*
-  Sistema de diseño: oscuro, cálido y sobrio.
-  Nada de neones — el acento es latón apagado, no un fluorescente.
+  Sistema de diseño: cartel monocromo.
+
+  Negro, tiza y los grises que salen de mezclarlos. No hay acento de color: lo
+  que destaca un elemento es la inversión del bloque (tiza maciza con el tipo
+  calado en negro), no un tono.
+
+  Las reglas solo abren y cierran secciones. Dentro de una sección no hay
+  celdas, ni columnas, ni filas dibujadas: separa el espacio. Es lo que obliga
+  a que la jerarquía la lleve el cuerpo tipográfico y no un marco.
 */
 @theme {
-  --color-ink: #0a0a0b; /* fondo de página */
-  --color-coal: #101013; /* bandas alternas */
-  --color-surface: #16161a; /* tarjetas y campos */
-  --color-line: #26262b; /* bordes */
-  --color-line-soft: #1c1c20;
-  --color-bone: #ede8df; /* texto principal */
-  --color-muted: #8c877f; /* texto secundario */
-  --color-brass: #c0a265; /* acento */
-  --color-brass-dim: #7d6838;
+  --color-void: #0c0c0b; /* fondo de página */
+  --color-void-2: #131312; /* bandas alternas, apenas perceptible */
+  --color-chalk: #ece8e0; /* trazo: texto principal y reglas de sección */
+  --color-chalk-2: #918c82; /* texto secundario */
+  /*
+    Trazo mínimo: bordes de campo en reposo, controles inactivos. No baja de
+    aquí. WCAG 1.4.11 pide 3:1 para el contorno de un control, y un borde de
+    campo que no se percibe es un campo que no se ve. Este da 3,38:1 sobre el
+    fondo y 3,21:1 sobre la banda.
+  */
+  --color-chalk-3: #6a655b;
 
-  --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Archivo Black', 'Arial Black', ui-sans-serif, sans-serif;
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  /*
+    La mono no es decorativa. Todo dato (precio, duración, cifra, fecha) va en
+    mono tabular: los números son una columna que se compara de un vistazo, y
+    con ancho proporcional no alinean. Sin retícula dibujada, esta alineación
+    es lo único que sostiene la lectura en columna.
+  */
+  --font-mono: 'Space Mono', ui-monospace, monospace;
 
-  --text-display: clamp(2.75rem, 7.4vw, 6rem);
-  --text-display--line-height: 0.95;
-  --text-section: clamp(2rem, 4.5vw, 3.75rem);
-  --text-section--line-height: 1;
+  /*
+    Cuerpo de reserva del titular. El definitivo lo calcula `usePosterFit`
+    midiendo el ancho real de cada línea: contar caracteres y estimar el avance
+    de la fuente no sirve, porque una línea de C, O y S es mucho más ancha que
+    una de I, T y L con el mismo número de letras.
 
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    Estos valores son deliberadamente cortos. Es lo que se ve durante el
+    instante anterior a la medida, y si el JS no corriera, sería lo definitivo:
+    conviene que quede corto y no que recorte una letra contra el margen.
+  */
+  --text-poster: clamp(2.5rem, 16vw, 12rem);
+  --text-poster--line-height: 0.8;
+  --text-poster--letter-spacing: -0.045em;
+
+  --text-mega: clamp(2.5rem, 10vw, 8rem);
+  --text-mega--line-height: 0.84;
+  --text-mega--letter-spacing: -0.035em;
+
+  --text-big: clamp(1.9rem, 5.5vw, 4.25rem);
+  --text-big--line-height: 0.9;
+  --text-big--letter-spacing: -0.025em;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/*
-  Solo los dispositivos con hover real arrancan en blanco y negro. En táctil el
-  estado base es a color, así que si el JS no corre igual se ven bien: el
-  degradado a gris y su revelado lo maneja Team.jsx con ScrollTrigger.
-*/
-@custom-variant can-hover (@media (hover: hover));
+@custom-variant can-hover (@media (hover: hover) and (pointer: fine));
 
 @layer base {
   html {
@@ -40,37 +70,84 @@
   }
 
   body {
-    @apply bg-ink text-bone font-sans antialiased;
+    @apply bg-void text-chalk font-sans antialiased;
   }
 
   ::selection {
-    @apply bg-brass text-ink;
+    @apply bg-chalk text-void;
   }
 
+  /* El foco es un bloque, no un halo: coherente con el resto del lenguaje. */
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brass;
+    @apply outline-2 outline-offset-2 outline-chalk;
   }
 
   h1,
   h2,
   h3 {
-    @apply font-display font-normal;
+    @apply font-display uppercase;
     text-wrap: balance;
   }
 }
 
-@utility eyebrow {
-  @apply font-sans text-xs font-medium uppercase tracking-[0.22em] text-brass;
+/* Etiqueta de dato. Mono, caja alta, gris. */
+@utility label {
+  @apply font-mono text-[0.68rem] uppercase tracking-[0.14em] text-chalk-2;
 }
 
-/* Placeholder de imagen: trama diagonal discreta, sin bloques de color planos. */
+/*
+  Regla de sección: la única línea gruesa del sistema. Abre un bloque, nunca
+  separa filas ni columnas dentro de él.
+*/
+@utility section-rule {
+  @apply border-t-2 border-chalk;
+}
+
+/*
+  Ritmo vertical. Sin retícula dibujada, el aire es lo único que separa un
+  bloque del siguiente, así que es bastante más generoso que antes.
+*/
+@utility section-y {
+  @apply py-24 md:py-32 lg:py-40;
+}
+
+@utility shell {
+  @apply mx-auto w-full max-w-[1600px] px-4 md:px-6;
+}
+
+/*
+  Bloque de acción. La jerarquía es por inversión, no por color: el primario es
+  una plancha de tiza con el tipo calado en negro. El estado activo lo hunde 2px
+  en vez de escalarlo, que es el gesto de algo impreso y no de algo de cristal.
+*/
+@utility block-cta {
+  @apply inline-flex items-center justify-center px-8 py-4
+    font-mono text-xs font-bold uppercase tracking-[0.14em]
+    transition-[background-color,color,border-color,transform] duration-150
+    ease-out-strong active:translate-y-[2px];
+}
+
+/* Placeholder de imagen: trama diagonal, coherente con el trazo. */
 @utility placeholder-art {
-  background-color: var(--color-surface);
+  background-color: var(--color-void-2);
   background-image: repeating-linear-gradient(
     -45deg,
-    color-mix(in oklab, var(--color-brass) 7%, transparent) 0 1px,
-    transparent 1px 11px
+    color-mix(in oklab, var(--color-chalk) 14%, transparent) 0 1px,
+    transparent 1px 9px
   );
+}
+
+/*
+  Grano. Sobre fondo oscuro va con mezcla normal: el ruido tiene que aclarar la
+  fibra. En negativo, `multiply` no haría nada.
+*/
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Lenis: mientras hace scroll desactivamos la selección accidental de texto. */
@@ -88,8 +165,21 @@ html.lenis body {
 }
 
 /*
-  Aquí iría el bloque `@media (prefers-reduced-motion: reduce)` que anula
-  transiciones y keyframes. Está quitado a propósito: la política actual es
-  animar para todo el mundo (ver src/lib/motionPolicy.js). Si se pone
-  RESPECT_REDUCED_MOTION a true, hay que devolver este bloque.
+  Movimiento reducido no quiere decir cero movimiento: quiere decir movimiento
+  sin desplazamiento. Se mantienen opacidad y color, que ayudan a entender qué
+  pasó; se quitan traslaciones, parallax y bucles.
 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .grain {
+    display: none;
+  }
+}

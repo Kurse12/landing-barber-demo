@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { gsap, ScrollTrigger, useGSAP, motionSafe } from '../lib/gsap'
+import { gsap, useGSAP, motionSafe } from '../lib/gsap'
 import { marquee } from '../data/site'
 
 // Velocidad de crucero. A menos que esto, la banda parece parada.
@@ -15,6 +15,17 @@ export default function Marquee() {
   const track = useRef(null)
 
   useGSAP(() => {
+    /*
+      Movimiento constante y desacoplado del scroll. Antes la banda leía la
+      velocidad y la dirección del scroll para acelerar y darse vuelta: se ve
+      llamativo en un demo, pero en uso real el usuario percibe que un elemento
+      decorativo reacciona a su gesto sin haberlo pedido, y al subir la banda
+      invierte la marcha, que es lo que se lee como un fallo.
+
+      Es la única animación en bucle de la página. Ritmo lineal a propósito: el
+      movimiento continuo con easing acelera y frena en cada ciclo, y el ojo
+      detecta ese latido aunque no sepa nombrarlo.
+    */
     const mm = motionSafe(() => {
       const half = track.current.scrollWidth / 2
 
@@ -25,33 +36,7 @@ export default function Marquee() {
         repeat: -1,
       })
 
-      // La banda reacciona al scroll: acelera con la inercia y se orienta
-      // hacia donde va el usuario. Al soltar, vuelve a su ritmo.
-      const speed = { value: 1 }
-      const apply = () => loop.timeScale(speed.value)
-
-      const trigger = ScrollTrigger.create({
-        onUpdate: (self) => {
-          const direction = self.direction
-          const boost = gsap.utils.clamp(1, 5, Math.abs(self.getVelocity()) / 450)
-
-          gsap.killTweensOf(speed)
-          speed.value = boost * direction
-          apply()
-
-          gsap.to(speed, {
-            value: direction,
-            duration: 0.9,
-            ease: 'power2.out',
-            onUpdate: apply,
-          })
-        },
-      })
-
-      return () => {
-        gsap.killTweensOf(speed)
-        trigger.kill()
-      }
+      return () => loop.kill()
     })
 
     return () => mm.revert()
@@ -60,17 +45,21 @@ export default function Marquee() {
   const half = Array.from({ length: PASSES_PER_HALF }, () => marquee).flat()
 
   return (
+    // Plancha de tiza a sangre. Es el único bloque invertido permanente de la
+    // página, y funciona porque es una banda fina: da el golpe gráfico sin
+    // convertir una pantalla entera en blanco.
     <div
       aria-hidden="true"
-      className="overflow-hidden border-b border-line bg-coal py-6 select-none"
+      className="select-none overflow-hidden border-y-2 border-chalk bg-chalk py-4"
     >
       <div ref={track} data-marquee-track className="flex w-max items-center">
         {[...half, ...half].map((word, i) => (
-          <span key={i} className="flex items-center gap-10 pr-10">
-            <span className="font-display text-2xl whitespace-nowrap text-bone/70 md:text-3xl">
+          <span key={i} className="flex items-center gap-8 pr-8">
+            <span className="whitespace-nowrap font-display text-3xl uppercase tracking-tight text-void md:text-4xl">
               {word}
             </span>
-            <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-brass" />
+            {/* Cuadrado, no rombo: en este lenguaje nada está rotado. */}
+            <span className="h-2.5 w-2.5 shrink-0 bg-void" />
           </span>
         ))}
       </div>

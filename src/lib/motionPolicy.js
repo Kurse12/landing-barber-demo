@@ -4,13 +4,16 @@
  * `false` → animamos para todo el mundo, ignorando `prefers-reduced-motion`.
  * `true`  → respetamos la preferencia del sistema y no animamos nada.
  *
- * Decisión de producto tomada a conciencia: se prioriza que la landing se vea
- * igual para todos. Contrapartida real: la WCAG 2.3.3 y 2.2.2 esperan que el
- * movimiento no esencial se pueda desactivar, y el parallax y el scroll suave
- * pueden marear a personas con trastornos vestibulares. Poner esto a `true`
- * devuelve el comportamiento accesible sin tocar ningún componente.
+ * Estaba en `false` mientras la página animaba poco. El rediseño subió bastante
+ * la carga de movimiento (pin, pan horizontal, preview siguiendo el cursor), y
+ * con ese volumen el parallax y el scroll suave pueden marear a personas con
+ * trastornos vestibulares. WCAG 2.3.3 y 2.2.2 esperan poder desactivarlo, así
+ * que ahora se respeta la preferencia del sistema.
+ *
+ * Volver atrás es cambiar esta constante: ningún componente lee la media query
+ * por su cuenta.
  */
-export const RESPECT_REDUCED_MOTION = false
+export const RESPECT_REDUCED_MOTION = true
 
 /** Consulta puntual, fuera de React. */
 export function prefersReducedMotion() {

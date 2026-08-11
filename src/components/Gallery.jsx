@@ -1,94 +1,208 @@
-import { useRef } from 'react'
-import { gsap, useGSAP, motionSafe } from '../lib/gsap'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { gsap, ScrollTrigger, useGSAP, motionSafe } from '../lib/gsap'
 import { business, gallery } from '../data/site'
+import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
+import { showDemoToast } from '../lib/demoToast'
 import SectionHeading from './ui/SectionHeading'
+
+const EASE = [0.23, 1, 0.32, 1]
+
+// Demo: el enlace no lleva a ningún perfil real, avisa por qué.
+const handleInstagramClick = (event) => {
+  event.preventDefault()
+  showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al Instagram del negocio.')
+}
 
 export default function Gallery() {
   const root = useRef(null)
+  const wrap = useRef(null)
+  const track = useRef(null)
+  const reduced = useReducedMotionPolicy()
+  const [open, setOpen] = useState(null)
 
   useGSAP(
     () => {
       const mm = motionSafe(() => {
-        gsap.utils.toArray('[data-gallery-item]').forEach((item) => {
-          gsap.fromTo(
-            item,
-            { clipPath: 'inset(0% 0% 100% 0%)' },
-            {
-              clipPath: 'inset(0% 0% 0% 0%)',
-              duration: 1.1,
-              ease: 'expo.out',
-              scrollTrigger: { trigger: item, start: 'top 90%' },
+        /*
+          El scroll vertical mueve la tira en horizontal. Es el único sitio de
+          la página donde el hijack está justificado: son fotos que se miran en
+          secuencia, y la secuencia es el contenido.
+
+          Solo en escritorio. En un teléfono el usuario ya tiene un gesto
+          horizontal nativo mejor que cualquier pin, así que ahí la tira es un
+          scroll con snap normal.
+        */
+        const desktop = gsap.matchMedia()
+
+        desktop.add('(min-width: 768px)', () => {
+          const distance = () => track.current.scrollWidth - window.innerWidth
+
+          const tween = gsap.to(track.current, {
+            x: () => -distance(),
+            ease: 'none',
+            scrollTrigger: {
+              trigger: wrap.current,
+              // top top y pin: la sección se ancla cuando su borde superior
+              // toca el de la ventana. Con `top center` el usuario ve media
+              // diapositiva antes de que empiece el pan.
+              start: 'top top',
+              end: () => `+=${distance()}`,
+              pin: true,
+              scrub: 1,
+              // Las imágenes cargan en diferido: si el ancho del track cambia
+              // después de medir, el pan se corta antes de llegar al final.
+              invalidateOnRefresh: true,
             },
-          )
+          })
+
+          return () => tween.kill()
         })
+
+        return () => desktop.revert()
       })
+
       return () => mm.revert()
     },
     { scope: root },
   )
 
-  return (
-    <section id="galeria" ref={root} className="border-b border-line bg-coal">
-      <div className="mx-auto max-w-7xl px-5 py-24 lg:px-10 lg:py-32">
-        <SectionHeading
-          index="04"
-          eyebrow="El trabajo"
-          title="Lo que sale de estos sillones"
-          subtitle="Una muestra de cortes y afeitados de las últimas semanas."
-        />
+  const remeasure = () => ScrollTrigger.refresh()
 
-        {/* Celdas 3:4 iguales: las fotos son verticales y así apenas se recortan. */}
-        <ul className="mt-16 grid grid-cols-2 gap-4 lg:grid-cols-3">
-          {gallery.map((item) => (
-            <li
-              key={item.id}
-              data-gallery-item
-              className="group relative aspect-[3/4] overflow-hidden bg-surface"
+  useEffect(() => {
+    if (open === null) return
+    const onKey = (event) => event.key === 'Escape' && setOpen(null)
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const item = open === null ? null : gallery[open]
+
+  return (
+    <section id="galeria" ref={root} className="bg-void">
+      <div className="shell pb-14 pt-24 md:pt-32">
+        <SectionHeading
+          title="El trabajo"
+          meta="Últimas semanas"
+          subtitle="Una muestra de cortes y afeitados salidos de estos sillones."
+          className="max-w-4xl"
+        />
+      </div>
+
+      {/* Sin reglas entre láminas: las separa el hueco. Con `gap` la tira se
+          lee como una secuencia de copias sueltas y no como una tabla. */}
+      <div
+        ref={wrap}
+        className="relative overflow-x-auto pb-20 md:h-[100dvh] md:overflow-hidden md:pb-0"
+      >
+        <div
+          ref={track}
+          className="flex w-max snap-x snap-mandatory items-stretch gap-4 px-4 md:h-full md:items-center md:gap-8 md:px-6"
+        >
+          {gallery.map((photo, i) => (
+            <button
+              key={photo.id}
+              type="button"
+              onClick={() => setOpen(i)}
+              aria-label={`Ampliar: ${photo.alt}`}
+              className="group shrink-0 snap-center text-left transition-transform duration-150 ease-out-strong active:translate-y-[2px]"
             >
-              <img
-                src={item.src}
-                alt={item.alt}
-                loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105"
-              />
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-3 bg-gradient-to-t from-ink to-transparent p-4 opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
-                <span className="font-sans text-[0.7rem] uppercase tracking-[0.14em] text-bone">
-                  {item.alt}
+              <span className="block h-[52vh] w-[76vw] overflow-hidden bg-void-2 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]">
+                <img
+                  src={photo.src}
+                  alt={photo.alt}
+                  loading="lazy"
+                  onLoad={remeasure}
+                  className="h-full w-full object-cover grayscale contrast-125 transition-transform duration-200 ease-out-strong can-hover:group-hover:scale-105"
+                />
+              </span>
+
+              {/* Pie de lámina fuera del encuadre, no superpuesto: una etiqueta
+                  encima de la foto tapa justo lo que se quiere mirar. */}
+              <span className="mt-4 flex items-baseline justify-between gap-4">
+                <span className="max-w-[80%] font-sans text-xs leading-snug text-chalk-2">
+                  {photo.alt}
+                </span>
+                <span className="font-mono text-xs tabular-nums text-chalk-2">
+                  {String(i + 1).padStart(2, '0')}
                 </span>
               </span>
-            </li>
+            </button>
           ))}
 
-          {/* Sexta celda: cierra la retícula y lleva al perfil. */}
-          <li data-gallery-item className="aspect-[3/4]">
-            <a
-              href={business.social.instagram}
-              target="_blank"
-              rel="noreferrer"
-              className="group flex h-full flex-col justify-between border border-line bg-surface p-4 transition-colors duration-500 hover:border-brass lg:p-6"
-            >
-              <span className="eyebrow">Más trabajos</span>
-              <span>
-                {/* Texto con espacios a propósito: "@navajayroble" es una sola
-                    palabra de 13 caracteres y a este cuerpo no entra en media
-                    columna de móvil, así que va abajo en pequeño. */}
-                <span className="block font-display text-xl leading-tight text-bone transition-colors duration-300 group-hover:text-brass sm:text-2xl lg:text-3xl">
-                  Seguinos en Instagram
-                </span>
-                <span className="mt-3 flex items-center gap-2 font-sans text-[0.65rem] uppercase tracking-[0.12em] text-muted lg:text-[0.7rem]">
-                  @navajayroble
-                  <span
-                    aria-hidden="true"
-                    className="text-brass transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1"
-                  >
-                    →
-                  </span>
+          {/* Última lámina: cierra la tira y lleva al perfil. */}
+          <a
+            href={business.social.instagram}
+            target="_blank"
+            rel="noreferrer"
+            onClick={handleInstagramClick}
+            className="group flex h-[52vh] w-[76vw] shrink-0 snap-center flex-col justify-between bg-chalk p-6 text-void transition-opacity duration-150 hover:opacity-80 sm:w-[48vw] md:h-[62vh] md:w-[clamp(320px,30vw,520px)]"
+          >
+            <span className="font-mono text-[0.68rem] uppercase tracking-[0.14em] text-void/60">
+              Más trabajos
+            </span>
+            <span>
+              <span className="block font-display text-5xl uppercase leading-[0.85] tracking-tight md:text-6xl">
+                Seguinos en Instagram
+              </span>
+              <span className="mt-6 flex items-center gap-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-void/70">
+                {business.instagramHandle}
+                <span
+                  aria-hidden="true"
+                  className="transition-transform duration-150 ease-out-strong group-hover:translate-x-1"
+                >
+                  &rarr;
                 </span>
               </span>
-            </a>
-          </li>
-        </ul>
+            </span>
+          </a>
+        </div>
       </div>
+
+      {/*
+        El lightbox entra centrado y desde scale(0.95), no desde la miniatura:
+        una animación de elemento compartido tendría que medir posiciones dentro
+        de un contenedor que GSAP está trasladando, y salta. Además un modal no
+        está anclado a un disparador concreto, así que centrado es lo correcto.
+      */}
+      <AnimatePresence>
+        {item && (
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={item.alt}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.18, ease: EASE }}
+            onClick={() => setOpen(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-void p-4 md:p-12"
+          >
+            <motion.img
+              src={item.src}
+              alt={item.alt}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: reduced ? 0 : 0.22, ease: EASE }}
+              onClick={(event) => event.stopPropagation()}
+              className="max-h-full max-w-full object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => setOpen(null)}
+              aria-label="Cerrar"
+              className="absolute right-4 top-4 bg-chalk px-4 py-2 font-mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-void transition-transform duration-150 ease-out-strong active:translate-y-[2px] md:right-10 md:top-10"
+            >
+              Cerrar
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }

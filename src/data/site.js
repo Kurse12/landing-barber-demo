@@ -21,22 +21,34 @@ export const images = {
   },
 }
 
+// Proyecto de demostración: el nombre, la dirección y las redes son genéricos
+// a propósito. No representan un negocio real, así que no llevan una marca
+// distintiva ni datos que puedan leerse como reales.
 export const business = {
-  name: 'Navaja & Roble',
-  tagline: 'Barbería clásica en San Telmo, Buenos Aires',
-  // El titular va partido para poder darle otro tono a la segunda mitad.
-  claim: { lead: 'Cortes de toda la vida,', tail: 'con las manos de siempre.' },
+  name: 'Barbería Clásica',
+  tagline: 'Barbería de barrio, corte de toda la vida',
+  /*
+    El titular va servido línea por línea, no como una frase que el navegador
+    parte donde puede. En un cartel el corte de línea es una decisión de
+    composición: cada línea lleva su propio cuerpo para terminar a ras del
+    mismo margen, y eso solo se puede hacer si las líneas están declaradas.
+  */
+  claim: {
+    poster: ['Cortes', 'de toda', 'la vida'],
+    tail: 'con las manos de siempre',
+  },
   // Tres formas del mismo número, porque cada destino la pide distinta:
   phone: '11 2222 3333', // como se muestra en pantalla
   phoneHref: '+541122223333', // para el enlace tel:
   whatsapp: '5491122223333', // wa.me exige el 9 de celular después del 54
-  email: 'hola@navajayroble.com.ar',
-  address: 'Defensa 1024, San Telmo, CABA',
-  mapsUrl: 'https://maps.google.com/?q=Defensa+1024+San+Telmo+Buenos+Aires',
+  email: 'hola@barberiaclasica.com.ar',
+  address: 'Calle Principal 123, Buenos Aires',
+  mapsUrl: 'https://maps.google.com/?q=Calle+Principal+123+Buenos+Aires',
+  instagramHandle: '@barberiaclasica',
   social: {
-    instagram: 'https://instagram.com/navajayroble',
-    facebook: 'https://facebook.com/navajayroble',
-    tiktok: 'https://tiktok.com/@navajayroble',
+    instagram: 'https://instagram.com/barberiaclasica',
+    facebook: 'https://facebook.com/barberiaclasica',
+    tiktok: 'https://tiktok.com/@barberiaclasica',
   },
 }
 
@@ -55,6 +67,7 @@ export const nav = [
 export const services = [
   {
     id: 'corte',
+    preview: gal1,
     name: 'Corte clásico',
     description: 'Tijera y máquina, lavado y peinado final.',
     price: 12000,
@@ -63,6 +76,7 @@ export const services = [
   },
   {
     id: 'corte-barba',
+    preview: gal3,
     name: 'Corte + Barba',
     description: 'El completo: corte a medida y perfilado de barba con toalla caliente.',
     price: 18000,
@@ -71,6 +85,7 @@ export const services = [
   },
   {
     id: 'barba',
+    preview: gal2,
     name: 'Afeitado a navaja',
     description: 'Afeitado tradicional, toalla caliente y bálsamo post-afeitado.',
     price: 10000,
@@ -79,6 +94,7 @@ export const services = [
   },
   {
     id: 'nino',
+    preview: nosotrosImg,
     name: 'Corte para chicos',
     description: 'Para los más chicos (hasta 12 años). Sin apuro y con paciencia.',
     price: 9000,
@@ -87,6 +103,7 @@ export const services = [
   },
   {
     id: 'tinte',
+    preview: gal4,
     name: 'Color y canas',
     description: 'Cobertura de canas o cambio de tono con productos sin amoníaco.',
     price: 15000,
@@ -95,7 +112,8 @@ export const services = [
   },
   {
     id: 'ritual',
-    name: 'Ritual Navaja & Roble',
+    preview: gal5,
+    name: 'Ritual de la casa',
     description: 'Corte, afeitado a navaja, máscara facial y masaje capilar.',
     price: 28000,
     duration: 80,
@@ -154,18 +172,21 @@ export const testimonials = [
   {
     id: 't1',
     name: 'Javier M.',
+    since: 'Cliente desde 2019',
     rating: 5,
     text: 'Hace dos años que vengo y nunca salí con un corte que no me guste. Marco te escucha en serio.',
   },
   {
     id: 't2',
     name: 'Adrián P.',
+    since: 'Cliente desde 2021',
     rating: 5,
     text: 'El afeitado a navaja es otro nivel. Salís de ahí como nuevo.',
   },
   {
     id: 't3',
     name: 'Sergio L.',
+    since: 'Cliente desde 2016',
     rating: 4,
     text: 'Muy buen ambiente y precios justos. Sacá turno, que se llena.',
   },
@@ -173,11 +194,11 @@ export const testimonials = [
 
 export const schedule = [
   { day: 'Lunes', hours: 'Cerrado' },
-  { day: 'Martes', hours: '10:00 – 20:00' },
-  { day: 'Miércoles', hours: '10:00 – 20:00' },
-  { day: 'Jueves', hours: '10:00 – 20:00' },
-  { day: 'Viernes', hours: '10:00 – 21:00' },
-  { day: 'Sábado', hours: '09:00 – 14:00' },
+  { day: 'Martes', hours: '10:00 - 20:00' },
+  { day: 'Miércoles', hours: '10:00 - 20:00' },
+  { day: 'Jueves', hours: '10:00 - 20:00' },
+  { day: 'Viernes', hours: '10:00 - 21:00' },
+  { day: 'Sábado', hours: '09:00 - 14:00' },
   { day: 'Domingo', hours: 'Cerrado' },
 ]
 

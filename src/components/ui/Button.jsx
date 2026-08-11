@@ -1,24 +1,23 @@
-const base =
-  'group relative inline-flex items-center justify-center gap-2 overflow-hidden ' +
-  'font-sans text-xs font-medium uppercase tracking-[0.18em] transition-colors ' +
-  'duration-300 disabled:pointer-events-none disabled:opacity-50'
+/*
+  Bloque de acción. Sin color de acento, la jerarquía la lleva la inversión: el
+  primario es una plancha de tiza con el tipo calado en negro, y al pasar por
+  encima se da vuelta. En un cartel el estado no se funde, se conmuta.
 
-const sizes = {
-  md: 'px-7 py-4',
-  sm: 'px-5 py-3 text-[0.7rem]',
+  La regla del primario solo se ve cuando el fondo desaparece, así que en reposo
+  no le suma ninguna línea a la página.
+
+  El `:active` hunde el bloque 2px en vez de escalarlo. Escalar es el gesto de
+  una superficie de cristal; hundir es el de algo impreso que se aprieta.
+*/
+const variants = {
+  primary: 'border-2 border-chalk bg-chalk text-void hover:bg-void hover:text-chalk',
+  ghost:
+    'border-2 border-chalk-3 bg-transparent text-chalk hover:border-chalk hover:bg-chalk hover:text-void',
 }
 
-const variants = {
-  // El relleno entra desde abajo en hover, sin cambiar el layout.
-  primary:
-    'bg-brass text-ink hover:text-ink before:absolute before:inset-0 before:-z-0 ' +
-    'before:origin-bottom before:scale-y-0 before:bg-bone before:transition-transform ' +
-    'before:duration-400 before:ease-[cubic-bezier(0.16,1,0.3,1)] hover:before:scale-y-100',
-  ghost:
-    'border border-line text-bone hover:border-brass hover:text-brass ' +
-    'before:absolute before:inset-0 before:-z-0 before:origin-bottom before:scale-y-0 ' +
-    'before:bg-surface before:transition-transform before:duration-400 ' +
-    'before:ease-[cubic-bezier(0.16,1,0.3,1)] hover:before:scale-y-100',
+const sizes = {
+  md: 'px-8 py-4 text-xs',
+  sm: 'px-5 py-3 text-[0.68rem]',
 }
 
 export default function Button({
@@ -30,8 +29,11 @@ export default function Button({
   ...rest
 }) {
   return (
-    <Tag className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
-      <span className="relative z-10">{children}</span>
+    <Tag
+      className={`block-cta ${sizes[size]} ${variants[variant]} ${className}`}
+      {...rest}
+    >
+      {children}
     </Tag>
   )
 }

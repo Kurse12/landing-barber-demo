@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { gsap, useGSAP, motionSafe } from '../lib/gsap'
-import { images } from '../data/site'
+import { business, images, stats } from '../data/site'
 import Reveal from './ui/Reveal'
 import SectionHeading from './ui/SectionHeading'
 
@@ -22,6 +22,12 @@ const values = [
   },
 ]
 
+const formatStat = (value, decimals) =>
+  value.toLocaleString('es-AR', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+
 export default function About() {
   const root = useRef(null)
 
@@ -33,14 +39,14 @@ export default function About() {
           { clipPath: 'inset(0% 0% 100% 0%)' },
           {
             clipPath: 'inset(0% 0% 0% 0%)',
-            duration: 1.4,
+            duration: 1.3,
             ease: 'expo.out',
-            scrollTrigger: { trigger: '[data-about-media]', start: 'top 85%' },
+            scrollTrigger: { trigger: '[data-about-media]', start: 'top 88%' },
           },
         )
 
         gsap.to('[data-about-media-inner]', {
-          yPercent: -12,
+          yPercent: -14,
           ease: 'none',
           scrollTrigger: {
             trigger: '[data-about-media]',
@@ -49,6 +55,26 @@ export default function About() {
             scrub: true,
           },
         })
+
+        /*
+          Contadores: animamos un objeto plano y escribimos el texto ya
+          formateado. Animar el nodo directo obligaría a reformatear con
+          toLocaleString en cada frame, que es caro.
+        */
+        stats.forEach((stat) => {
+          const el = root.current.querySelector(`[data-counter="${stat.id}"]`)
+          if (!el) return
+          const proxy = { value: 0 }
+          gsap.to(proxy, {
+            value: stat.to,
+            duration: 1.6,
+            ease: 'power2.out',
+            scrollTrigger: { trigger: el, start: 'top 90%' },
+            onUpdate: () => {
+              el.textContent = `${stat.prefix ?? ''}${formatStat(proxy.value, stat.decimals)}`
+            },
+          })
+        })
       })
       return () => mm.revert()
     },
@@ -56,62 +82,68 @@ export default function About() {
   )
 
   return (
-    <section id="nosotros" ref={root} className="border-b border-line bg-coal">
-      <div className="mx-auto grid max-w-7xl gap-14 px-5 py-24 lg:grid-cols-12 lg:gap-20 lg:px-10 lg:py-32">
-        <div className="lg:col-span-5">
-          <div
-            data-about-media
-            className="relative aspect-[3/4] overflow-hidden will-change-transform"
-          >
-            <img
-              data-about-media-inner
-              src={images.about.src}
-              alt={images.about.alt}
-              loading="lazy"
-              className="absolute inset-0 h-full w-full scale-115 object-cover"
-            />
-          </div>
+    <section id="nosotros" ref={root} className="bg-void-2">
+      <div className="shell pb-16 pt-24 md:pt-32">
+        <SectionHeading title="La casa" meta="Desde 2003" className="max-w-5xl" />
 
-          <Reveal delay={0.15} className="mt-6 flex items-center gap-4">
-            <span className="h-px w-10 bg-brass" />
-            <p className="font-sans text-xs uppercase tracking-[0.18em] text-muted">
-              Defensa 1024 · desde 2003
-            </p>
-          </Reveal>
-        </div>
-
-        <div className="lg:col-span-7">
-          <SectionHeading index="02" eyebrow="La casa" title="Veintidós años en el mismo local" />
-
-          <Reveal as="p" delay={0.1} className="mt-8 max-w-xl leading-relaxed text-muted">
-            Navaja &amp; Roble abrió en 2003 en un local de la calle Defensa con dos
-            sillones de segunda mano. Veintidós años después seguimos en el mismo lugar,
-            con los mismos sillones restaurados y bastantes más clientes.
+        <div className="mt-12 grid gap-10 md:grid-cols-2 md:gap-16">
+          <Reveal as="p" delay={0.08} className="max-w-xl leading-relaxed text-chalk-2">
+            {business.name} abrió en 2003 en un local de barrio con dos sillones de
+            segunda mano. Veintidós años después seguimos en el mismo lugar, con los
+            mismos sillones restaurados y bastantes más clientes.
           </Reveal>
 
-          <Reveal as="p" delay={0.16} className="mt-5 max-w-xl leading-relaxed text-muted">
+          <Reveal as="p" delay={0.14} className="max-w-xl leading-relaxed text-chalk-2">
             No somos un lugar de moda: somos la barbería a la que volvés. Acá te
             preguntamos qué querés, te decimos qué te va a quedar bien y te lo hacemos
             igual de bien un martes a la mañana que un viernes a última hora.
           </Reveal>
-
-          <ul className="mt-14 grid gap-px bg-line sm:grid-cols-3">
-            {values.map((value, i) => (
-              <Reveal
-                as="li"
-                key={value.id}
-                delay={0.1 + i * 0.08}
-                className="bg-coal p-6"
-              >
-                <span className="font-sans text-xs text-brass-dim tabular-nums">
-                  0{i + 1}
-                </span>
-                <h3 className="mt-4 text-2xl text-bone">{value.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{value.text}</p>
-              </Reveal>
-            ))}
-          </ul>
         </div>
+      </div>
+
+      {/* Banda a sangre: el respiro visual de la sección. Sin reglas propias,
+          la separan el aire de arriba y de abajo. */}
+      <div data-about-media className="relative h-[45vh] overflow-hidden md:h-[62vh]">
+        <img
+          data-about-media-inner
+          src={images.about.src}
+          alt={images.about.alt}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full scale-115 object-cover grayscale contrast-125 will-change-transform"
+        />
+      </div>
+
+      <div className="shell pb-24 pt-20 md:pb-32">
+        {/*
+          Cifras a cuerpo de cartel, sin celdas dibujadas. Lo que las alinea en
+          columna es que van en mono tabular y que las etiquetas comparten línea
+          de base; una regla vertical entre ellas no aportaría nada que el
+          espacio no esté haciendo ya.
+        */}
+        <dl className="grid grid-cols-1 gap-12 sm:grid-cols-3 sm:gap-8">
+          {stats.map((stat) => (
+            // flex-col-reverse: el número se ve arriba, pero en el DOM el <dt>
+            // va antes que su <dd>, como pide la semántica de <dl>.
+            <Reveal key={stat.id} className="flex flex-col-reverse">
+              <dt className="label mt-3">{stat.label}</dt>
+              <dd
+                data-counter={stat.id}
+                className="font-display text-mega tabular-nums text-chalk"
+              >
+                {`${stat.prefix ?? ''}${formatStat(stat.to, stat.decimals)}`}
+              </dd>
+            </Reveal>
+          ))}
+        </dl>
+
+        <ul className="mt-28 grid grid-cols-1 gap-14 md:grid-cols-3 md:gap-10">
+          {values.map((value, i) => (
+            <Reveal as="li" key={value.id} delay={i * 0.07}>
+              <h3 className="text-2xl text-chalk md:text-3xl">{value.title}</h3>
+              <p className="mt-4 max-w-sm leading-relaxed text-chalk-2">{value.text}</p>
+            </Reveal>
+          ))}
+        </ul>
       </div>
     </section>
   )
