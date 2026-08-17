@@ -130,6 +130,17 @@ export default function Gallery() {
           subtitle="Una muestra de cortes y afeitados salidos de estos sillones."
           className="max-w-4xl"
         />
+
+        {/* Debajo de md la tira es scroll táctil nativo, no el pin de GSAP:
+            ese gesto no tiene ninguna otra pista visual en pantalla, así que
+            lo decimos. Desaparece a partir de md porque ahí el pin ya mueve
+            la tira solo. */}
+        <p className="label mt-6 flex items-center gap-2 md:hidden">
+          Deslizá para ver más
+          <span aria-hidden="true" className="motion-safe:animate-nudge-x">
+            &rarr;
+          </span>
+        </p>
       </div>
 
       {/* Sin reglas entre láminas: las separa el hueco. Con `gap` la tira se
@@ -186,7 +197,16 @@ export default function Gallery() {
               Más trabajos
             </span>
             <span>
-              <span className="block font-display text-5xl uppercase leading-[0.85] tracking-tight md:text-6xl">
+              {/*
+                La lámina mide 76vw en mobile (y el ancho se achica de nuevo a
+                los 320px de piso del clamp entre md y ~lg): a texto fijo,
+                "Instagram" en Archivo Black no entra en ese hueco y el tramo
+                que se sale queda del mismo color que el fondo detrás de la
+                lámina, así que se lee como cortado en vez de desbordado. El
+                clamp mantiene la palabra dentro de la caja en todo el rango;
+                `break-words` es el resguardo si igual no entra.
+              */}
+              <span className="block break-words font-display text-[clamp(1.75rem,5.5vw,2.5rem)] uppercase leading-[0.85] tracking-tight xl:text-5xl 2xl:text-6xl">
                 Seguinos en Instagram
               </span>
               <span className="mt-6 flex items-center gap-2 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-void/70">

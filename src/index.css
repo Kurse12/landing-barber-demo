@@ -95,6 +95,22 @@
   @apply font-mono text-[0.68rem] uppercase tracking-[0.14em] text-chalk-2;
 }
 
+/* Nudge horizontal: la flecha del aviso "deslizá para ver más" en Gallery.
+   Solo insinúa el gesto, no lo explica dos veces. */
+@keyframes nudge-x {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+
+@utility animate-nudge-x {
+  animation: nudge-x 1.3s ease-in-out infinite;
+}
+
 /*
   Regla de sección: la única línea gruesa del sistema. Abre un bloque, nunca
   separa filas ni columnas dentro de él.
