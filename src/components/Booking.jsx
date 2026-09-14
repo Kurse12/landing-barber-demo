@@ -22,6 +22,7 @@ const NEXT_LABELS = ['Barbero', 'Día y hora', 'Confirmar']
 const ANY_BARBER = 'cualquiera'
 const SLOT_STEP = 30 // minutos entre un horario y el siguiente
 const MONTHS_AHEAD = 2 // hasta cuántos meses adelante se puede reservar
+const NAV_OFFSET = 96 // alto de la barra fija más un respiro
 
 // Franjas para no servir veinte horarios en una sola tira: quien viene antes
 // del trabajo busca la mañana y no tiene por qué leer la tarde.
@@ -298,6 +299,13 @@ export default function Booking({ selectedService }) {
     if (!pendingFocus.current) return
     pendingFocus.current = false
     headingRef.current?.focus({ preventScroll: true })
+    // Cada paso está pensado para verse entero en una pantalla. Si el paso
+    // nuevo quedó tapado por la barra o se sale por abajo, se lo alinea
+    // arriba; si ya se ve completo, no se mueve nada.
+    const rect = wizardRef.current?.getBoundingClientRect()
+    if (rect && (rect.top < NAV_OFFSET - 8 || rect.bottom > window.innerHeight)) {
+      scrollToId('turno-asistente', { offset: -NAV_OFFSET })
+    }
   }, [step, status])
 
   const service = findService(draft.service)
@@ -310,11 +318,6 @@ export default function Booking({ selectedService }) {
     pendingFocus.current = true
     setBlocked(false)
     setStep(index)
-    // Si el usuario bajó hasta los horarios, el paso nuevo empieza arriba de
-    // la pantalla: se lo trae de vuelta en vez de dejarlo mirando el pie.
-    if ((wizardRef.current?.getBoundingClientRect().top ?? 0) < 0) {
-      scrollToId('turno-asistente', { offset: -96 })
-    }
   }
 
   const choose = (patch) => {
@@ -399,12 +402,12 @@ export default function Booking({ selectedService }) {
   ]
 
   const stepTitle = (text, context) => (
-    <div className="mb-8">
+    <div className="mb-6">
       <h3
         ref={headingRef}
         id="turno-paso-titulo"
         tabIndex={-1}
-        className="text-2xl leading-none tracking-[-0.02em] text-chalk focus:outline-none md:text-4xl"
+        className="text-2xl leading-none tracking-[-0.02em] text-chalk focus:outline-none md:text-3xl"
       >
         {text}
       </h3>
@@ -415,7 +418,7 @@ export default function Booking({ selectedService }) {
   const renderService = () => (
     <>
       {stepTitle('Qué te hacés')}
-      <ul className="grid gap-3 sm:grid-cols-2" aria-labelledby="turno-paso-titulo">
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-labelledby="turno-paso-titulo">
         {services.map((item, i) => {
           const selected = draft.service === item.id
           const muted = selected ? 'text-void/70' : 'text-chalk-2'
@@ -456,7 +459,7 @@ export default function Booking({ selectedService }) {
     return (
       <>
         {stepTitle('Con quién', `${service.name} · ${service.duration} min`)}
-        <ul className="grid gap-3 sm:grid-cols-2" aria-labelledby="turno-paso-titulo">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-labelledby="turno-paso-titulo">
           {options.map((member) => {
             const selected = draft.barber === member.id
             const available =
@@ -522,113 +525,126 @@ export default function Booking({ selectedService }) {
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-4">
-          <p className="font-display text-xl uppercase leading-none" aria-live="polite">
-            {MONTHS[view.month]} {view.year}
-          </p>
-          <div className="flex gap-2">
-            {[
-              { delta: -1, label: 'Mes anterior', glyph: '←', disabled: viewIndex <= todayIndex },
-              { delta: 1, label: 'Mes siguiente', glyph: '→', disabled: viewIndex >= todayIndex + MONTHS_AHEAD },
-            ].map((nav) => (
-              <button
-                key={nav.delta}
-                type="button"
-                aria-label={nav.label}
-                disabled={nav.disabled}
-                onClick={() => shiftMonth(nav.delta)}
-                className={`${choiceBase} flex h-11 w-11 items-center justify-center font-mono text-sm ${
-                  nav.disabled ? choiceDisabled : choiceOff
-                }`}
-              >
-                <span aria-hidden="true">{nav.glyph}</span>
-              </button>
-            ))}
+        {/* Calendario y horarios lado a lado desde 1024px. Apilados, elegir un
+            día empujaba los horarios y el botón para seguir fuera de pantalla:
+            el paso entero tiene que caber en un solo vistazo. */}
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-16">
+          <div>
+            <div className="flex items-center justify-between gap-4">
+              <p className="font-display text-xl uppercase leading-none" aria-live="polite">
+                {MONTHS[view.month]} {view.year}
+              </p>
+              <div className="flex gap-2">
+                {[
+                  { delta: -1, label: 'Mes anterior', glyph: '←', disabled: viewIndex <= todayIndex },
+                  { delta: 1, label: 'Mes siguiente', glyph: '→', disabled: viewIndex >= todayIndex + MONTHS_AHEAD },
+                ].map((nav) => (
+                  <button
+                    key={nav.delta}
+                    type="button"
+                    aria-label={nav.label}
+                    disabled={nav.disabled}
+                    onClick={() => shiftMonth(nav.delta)}
+                    className={`${choiceBase} flex h-11 w-11 items-center justify-center font-mono text-sm ${
+                      nav.disabled ? choiceDisabled : choiceOff
+                    }`}
+                  >
+                    <span aria-hidden="true">{nav.glyph}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {CLOSED_DAYS_LABEL && <p className="label mt-1">Cerramos {CLOSED_DAYS_LABEL}</p>}
+
+            <div className="mt-5 grid grid-cols-7 gap-1 sm:gap-1.5">
+              {WEEKDAYS_SHORT.map((day) => (
+                <span key={day} aria-hidden="true" className="label pb-1 text-center">
+                  {day}
+                </span>
+              ))}
+              {monthCells(view.year, view.month).map((key, i) => {
+                if (!key) return <span key={`vacío-${i}`} aria-hidden="true" />
+                const statusKey = dayStatus(draft, key, now)
+                const disabled = statusKey !== 'open'
+                const selected = draft.date === key
+                const state = selected ? choiceOn : disabled ? choiceDisabled : choiceOff
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={selected}
+                    aria-label={`${formatLongDate(key)}${disabled ? `, ${DAY_STATUS_LABEL[statusKey].toLowerCase()}` : ''}`}
+                    onClick={() => {
+                      if (!selected) choose({ date: key, time: '' })
+                    }}
+                    className={`${choiceBase} relative flex h-12 flex-col items-center justify-center gap-0.5 text-center font-mono tabular-nums sm:h-14 short:h-11 ${state}`}
+                  >
+                    <span className="text-sm">{Number(key.slice(8))}</span>
+                    {/* En un teléfono no entra la palabra: el día apagado y el
+                        aria-label ya dicen que no se puede. */}
+                    {disabled && (
+                      <span className="hidden text-[0.55rem] uppercase tracking-[0.1em] sm:block">
+                        {DAY_STATUS_LABEL[statusKey]}
+                      </span>
+                    )}
+                    {/* El marcador de hoy es estado real, igual que en "Horario". */}
+                    {key === todayKey && (
+                      <span
+                        aria-hidden="true"
+                        className={`absolute left-1.5 top-1.5 h-1.5 w-1.5 ${selected ? 'bg-void' : disabled ? 'bg-chalk-3' : 'bg-chalk'}`}
+                      />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            {draft.date ? (
+              <>
+                <p className="label text-chalk">Horarios del {formatLongDate(draft.date)}</p>
+                {PERIODS.map((period) => {
+                  const list = slots.filter((time) => period.test(toMinutes(time)))
+                  if (list.length === 0) return null
+                  return (
+                    <div key={period.id} className="mt-5">
+                      <p className="label" id={`franja-${period.id}`}>
+                        {period.label}
+                      </p>
+                      <div
+                        className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-2"
+                        role="group"
+                        aria-labelledby={`franja-${period.id}`}
+                      >
+                        {list.map((time) => {
+                          const selected = draft.time === time
+                          return (
+                            <button
+                              key={time}
+                              type="button"
+                              aria-pressed={selected}
+                              onClick={() => choose({ time })}
+                              className={`${choiceBase} px-2 py-3 text-center font-mono text-sm tabular-nums ${
+                                selected ? choiceOn : choiceOff
+                              }`}
+                            >
+                              {time}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            ) : (
+              <p className="text-sm text-chalk-2 lg:mt-12">Elegí un día y te mostramos los horarios libres.</p>
+            )}
           </div>
         </div>
-
-        {CLOSED_DAYS_LABEL && <p className="label mt-3">Cerramos {CLOSED_DAYS_LABEL}</p>}
-
-        <div className="mt-6 grid grid-cols-7 gap-1 sm:gap-2">
-          {WEEKDAYS_SHORT.map((day) => (
-            <span key={day} aria-hidden="true" className="label pb-1 text-center">
-              {day}
-            </span>
-          ))}
-          {monthCells(view.year, view.month).map((key, i) => {
-            if (!key) return <span key={`vacío-${i}`} aria-hidden="true" />
-            const statusKey = dayStatus(draft, key, now)
-            const disabled = statusKey !== 'open'
-            const selected = draft.date === key
-            const state = selected ? choiceOn : disabled ? choiceDisabled : choiceOff
-            return (
-              <button
-                key={key}
-                type="button"
-                disabled={disabled}
-                aria-pressed={selected}
-                aria-label={`${formatLongDate(key)}${disabled ? `, ${DAY_STATUS_LABEL[statusKey].toLowerCase()}` : ''}`}
-                onClick={() => {
-                  if (!selected) choose({ date: key, time: '' })
-                }}
-                className={`${choiceBase} relative flex h-14 flex-col items-center justify-center gap-1 text-center font-mono tabular-nums sm:h-20 ${state}`}
-              >
-                <span className="text-sm sm:text-base">{Number(key.slice(8))}</span>
-                {/* En un teléfono no entra la palabra: el día apagado y el
-                    aria-label ya dicen que no se puede. */}
-                {disabled && (
-                  <span className="hidden text-[0.55rem] uppercase tracking-[0.1em] sm:block">
-                    {DAY_STATUS_LABEL[statusKey]}
-                  </span>
-                )}
-                {/* El marcador de hoy es estado real, igual que en "Horario". */}
-                {key === todayKey && (
-                  <span
-                    aria-hidden="true"
-                    className={`absolute left-1.5 top-1.5 h-1.5 w-1.5 ${selected ? 'bg-void' : disabled ? 'bg-chalk-3' : 'bg-chalk'}`}
-                  />
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        {draft.date ? (
-          <div className="mt-12">
-            <p className="label text-chalk">Horarios del {formatLongDate(draft.date)}</p>
-            {PERIODS.map((period) => {
-              const list = slots.filter((time) => period.test(toMinutes(time)))
-              if (list.length === 0) return null
-              return (
-                <div key={period.id} className="mt-6">
-                  <p className="label" id={`franja-${period.id}`}>
-                    {period.label}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2" role="group" aria-labelledby={`franja-${period.id}`}>
-                    {list.map((time) => {
-                      const selected = draft.time === time
-                      return (
-                        <button
-                          key={time}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => choose({ time })}
-                          className={`${choiceBase} min-w-[4.5rem] px-4 py-3 text-center font-mono text-sm tabular-nums ${
-                            selected ? choiceOn : choiceOff
-                          }`}
-                        >
-                          {time}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <p className="mt-10 text-sm text-chalk-2">Elegí un día y te mostramos los horarios libres.</p>
-        )}
       </>
     )
   }
@@ -646,7 +662,7 @@ export default function Booking({ selectedService }) {
     return (
       <>
         {stepTitle('Revisá y confirmá')}
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-3">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-3 xl:grid-cols-6">
           {summary.map(([label, value]) => (
             <div key={label}>
               <dt className="label">{label}</dt>
@@ -655,7 +671,7 @@ export default function Booking({ selectedService }) {
           ))}
         </dl>
 
-        <fieldset className="m-0 mt-14 min-w-0 border-0 p-0">
+        <fieldset className="m-0 mt-10 min-w-0 max-w-4xl border-0 p-0">
           <legend className="label mb-7 block w-full p-0 text-chalk">Tus datos</legend>
           <div className="grid gap-7 sm:grid-cols-2">
             <Field id="name" label="Nombre" required error={errors.name}>
@@ -742,7 +758,7 @@ export default function Booking({ selectedService }) {
         />
       </div>
 
-      <div className="shell grid gap-20 pb-24 md:pb-32 lg:grid-cols-[1.8fr_1fr] lg:gap-24">
+      <div className="shell pb-24 md:pb-32">
         <Reveal>
           {/* El aviso de demo llega antes de que alguien escriba su nombre y
               teléfono, no después de enviarlos. */}
@@ -809,13 +825,13 @@ export default function Booking({ selectedService }) {
               }
               animate={{ opacity: 1, transform: 'translateX(0px)' }}
               transition={{ duration: 0.22, ease: EASE }}
-              className="mt-12"
+              className="mt-10"
             >
               {sent ? renderSent() : renderers[step]()}
             </motion.div>
 
             {!sent && (
-              <div className="mt-14 flex flex-wrap items-end justify-between gap-6">
+              <div className="mt-10 flex flex-wrap items-end justify-between gap-6">
                 {step > 0 ? (
                   <button
                     type="button"
@@ -894,69 +910,76 @@ export default function Booking({ selectedService }) {
           </form>
         </Reveal>
 
-        {/* Columna de datos: listas sueltas, sin tarjeta ni hairlines por fila.
-            Las horas van en mono tabular, que es lo que las alinea. */}
-        <Reveal as="aside" delay={0.1}>
-          <h3 className="label">Horario</h3>
-          <ul className="mt-6 flex flex-col gap-3">
-            {schedule.map((row) => {
-              const isToday = row.day === todayName
-              const isClosed = row.hours === 'Cerrado'
-              return (
-                <li
-                  key={row.day}
-                  className={`flex items-baseline justify-between gap-6 font-mono text-sm ${
-                    isToday ? 'text-chalk' : 'text-chalk-2'
-                  }`}
-                >
-                  {/* El marcador solo aparece hoy: es estado real, no
-                      decoración repetida en cada fila. */}
-                  <span className="flex items-baseline gap-2">
-                    {isToday && <span className="h-1.5 w-1.5 shrink-0 bg-chalk" />}
-                    {row.day}
-                  </span>
-                  <span className={isClosed ? 'text-chalk-3' : 'tabular-nums'}>{row.hours}</span>
-                </li>
-              )
-            })}
-          </ul>
+        {/* Datos del local debajo del asistente, no al costado: al costado le
+            robaban un tercio del ancho y el paso de día y hora dejaba de caber
+            en pantalla. Listas sueltas, sin tarjeta ni hairlines por fila. */}
+        <Reveal as="aside" delay={0.1} className="mt-24 grid gap-14 md:grid-cols-3 md:gap-10">
+          <div className="max-w-sm">
+            <h3 className="label">Horario</h3>
+            <ul className="mt-6 flex flex-col gap-3">
+              {schedule.map((row) => {
+                const isToday = row.day === todayName
+                const isClosed = row.hours === 'Cerrado'
+                return (
+                  <li
+                    key={row.day}
+                    className={`flex items-baseline justify-between gap-6 font-mono text-sm ${
+                      isToday ? 'text-chalk' : 'text-chalk-2'
+                    }`}
+                  >
+                    {/* El marcador solo aparece hoy: es estado real, no
+                        decoración repetida en cada fila. */}
+                    <span className="flex items-baseline gap-2">
+                      {isToday && <span className="h-1.5 w-1.5 shrink-0 bg-chalk" />}
+                      {row.day}
+                    </span>
+                    <span className={isClosed ? 'text-chalk-3' : 'tabular-nums'}>{row.hours}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
 
-          <h3 className="label mt-12">Dónde estamos</h3>
-          <p className="mt-4 text-sm text-chalk-2">{business.address}</p>
-          {/* <button>, no <a href="#">: sin un href real no hay destino que el
-              clic derecho o el clic del medio puedan seguir sin el aviso. */}
-          <button
-            type="button"
-            onClick={() => {
-              showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al mapa del negocio.')
-            }}
-            className="mt-3 inline-block border-b-2 border-chalk py-1 font-mono text-xs uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
-          >
-            Ver en Google Maps
-          </button>
-
-          <h3 className="label mt-12">Contacto directo</h3>
-          {/* py-2: en móvil son el objetivo táctil principal de esta columna. */}
-          <p className="mt-2 flex flex-col font-mono text-sm">
+          <div>
+            <h3 className="label">Dónde estamos</h3>
+            <p className="mt-6 text-sm text-chalk-2">{business.address}</p>
+            {/* <button>, no <a href="#">: sin un href real no hay destino que el
+                clic derecho o el clic del medio puedan seguir sin el aviso. */}
             <button
               type="button"
               onClick={() => {
-                showDemoToast('Esto es una demo: en un sitio real este enlace abriría el teléfono para llamar.')
+                showDemoToast('Esto es una demo: en un sitio real este enlace llevaría al mapa del negocio.')
               }}
-              className="w-fit py-2 text-left text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
+              className="mt-3 inline-block border-b-2 border-chalk py-1 font-mono text-xs uppercase tracking-[0.14em] text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
             >
-              {business.phone}
+              Ver en Google Maps
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                showDemoToast('Esto es una demo: en un sitio real este enlace abriría el correo para escribir.')
-              }}
-              className="w-fit py-2 text-left text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
-            >
-              {business.email}
-            </button>
-          </p>
+          </div>
+
+          <div>
+            <h3 className="label">Contacto directo</h3>
+            {/* py-2: en móvil son el objetivo táctil principal de esta columna. */}
+            <p className="mt-4 flex flex-col font-mono text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  showDemoToast('Esto es una demo: en un sitio real este enlace abriría el teléfono para llamar.')
+                }}
+                className="w-fit py-2 text-left text-chalk transition-opacity duration-150 can-hover:hover:opacity-60"
+              >
+                {business.phone}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  showDemoToast('Esto es una demo: en un sitio real este enlace abriría el correo para escribir.')
+                }}
+                className="w-fit py-2 text-left text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
+              >
+                {business.email}
+              </button>
+            </p>
+          </div>
         </Reveal>
       </div>
     </section>
