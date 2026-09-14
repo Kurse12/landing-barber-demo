@@ -13,6 +13,10 @@ const variants = {
   primary: 'border-2 border-chalk bg-chalk text-void hover:bg-void hover:text-chalk',
   ghost:
     'border-2 border-chalk-3 bg-transparent text-chalk hover:border-chalk hover:bg-chalk hover:text-void',
+  // Todavía no se puede: sin plancha y sin reacción al hover. Va con
+  // `aria-disabled` y no con `disabled`, así sigue siendo enfocable y el clic
+  // puede explicar qué falta en vez de no hacer nada.
+  inert: 'cursor-not-allowed border-2 border-chalk-3 bg-transparent text-chalk-2',
 }
 
 const sizes = {

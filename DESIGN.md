@@ -137,7 +137,7 @@ Una familia de layout por sección.
 | Las manos | Tres retratos con parallax de distinta profundidad |
 | El trabajo | Tira horizontal anclada al scroll, láminas con pie |
 | Opiniones | Cita a cuerpo de cartel con controles al pie |
-| Turnos | Formulario y columna de datos |
+| Turnos | Asistente de cuatro pasos (servicio, barbero, día y hora, confirmar) y columna de datos |
 | Cierre | Titular masivo + plancha de tiza + wordmark recortado por el margen |
 
 **Sin eyebrows, sin numerar secciones, sin pistas de scroll.** Lo que separa una

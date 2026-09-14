@@ -17,8 +17,9 @@ export default function App() {
   useSmoothScroll()
 
   // Elegir un servicio en La carta y que Turnos lo recuerde: sin esto, cada
-  // clic manda al formulario pero el <select> vuelve al primer servicio de
-  // la lista, y quien ya eligió tiene que volver a buscarlo.
+  // clic manda al asistente pero arranca en el paso 1 sin nada elegido, y
+  // quien ya eligió tiene que volver a buscarlo. Va envuelto en un objeto
+  // nuevo por clic: repetir el mismo servicio también tiene que avisar.
   const [selectedService, setSelectedService] = useState(null)
 
   return (
@@ -36,7 +37,7 @@ export default function App() {
       <main className="w-full max-w-full overflow-x-clip">
         <Hero />
         <Marquee />
-        <Services onSelectService={setSelectedService} />
+        <Services onSelectService={(id) => setSelectedService({ id })} />
         <About />
         <Team />
         <Gallery />

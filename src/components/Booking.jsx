@@ -1,13 +1,37 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { business, formatPrice, schedule, services, stats, team } from '../data/site'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
 import { showDemoToast } from '../lib/demoToast'
+import { scrollToId } from '../lib/scroll'
 import Button from './ui/Button'
 import Reveal from './ui/Reveal'
 import SectionHeading from './ui/SectionHeading'
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const MONTHS = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+// La semana arranca en lunes, como se imprime un almanaque acá.
+const WEEKDAYS_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+const STEPS = ['Servicio', 'Barbero', 'Día y hora', 'Confirmar']
+const NEXT_LABELS = ['Barbero', 'Día y hora', 'Confirmar']
+
+const ANY_BARBER = 'cualquiera'
+const SLOT_STEP = 30 // minutos entre un horario y el siguiente
+const MONTHS_AHEAD = 2 // hasta cuántos meses adelante se puede reservar
+
+// Franjas para no servir veinte horarios en una sola tira: quien viene antes
+// del trabajo busca la mañana y no tiene por qué leer la tarde.
+const PERIODS = [
+  { id: 'manana', label: 'Mañana', test: (min) => min < 13 * 60 },
+  { id: 'tarde', label: 'Tarde', test: (min) => min >= 13 * 60 && min < 18 * 60 },
+  { id: 'noche', label: 'Desde las 18', test: (min) => min >= 18 * 60 },
+]
+
+const DAY_STATUS_LABEL = { past: 'Pasado', closed: 'Cerrado', full: 'Sin lugar' }
 
 // "Lunes y domingo", o "lunes, martes y domingo" si algún día se suma a la
 // lista de cierres. Se calcula una sola vez desde el mismo dato que pinta la
@@ -23,75 +47,183 @@ const CLOSED_DAYS_LABEL = formatClosedDays(
 )
 
 // Mismas cifras que ya generaron confianza en "La casa", resurgidas acá:
-// quien llega hasta el botón de enviar es quien más las necesita, y ahí
-// arriba quedaron a varias pantallas de distancia. Mismo formato `es-AR`
-// que usa esa sección, para no decir "22" de un lado y "22,0" del otro.
+// quien llega hasta el botón de confirmar es quien más las necesita.
 const YEARS_STAT = stats.find((stat) => stat.id === 's2')
 const RATING_STAT = stats.find((stat) => stat.id === 's3')
 const formatStat = (value, decimals) =>
   value.toLocaleString('es-AR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 
-const emptyForm = {
-  name: '',
-  phone: '',
-  service: services[0].id,
-  barber: 'cualquiera',
+const emptyDraft = {
+  service: null,
+  barber: null,
   date: '',
   time: '',
+  name: '',
+  phone: '',
   notes: '',
 }
 
 const EASE = [0.23, 1, 0.32, 1]
 
+const pad = (n) => String(n).padStart(2, '0')
+
+// Fecha local, no toISOString(): esa conversión pasa por UTC, y en Buenos
+// Aires (UTC-3) después de las 21:00 ya cae en el día siguiente.
+const toDateKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+const toMinutes = (hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+const toHHMM = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
+
+// Medianoche local: new Date('YYYY-MM-DD') sin hora se lee en UTC y el día
+// de la semana puede quedar corrido uno.
+const parseDateKey = (key) => new Date(`${key}T00:00:00`)
+const formatLongDate = (key) =>
+  parseDateKey(key).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+
+const findService = (id) => services.find((service) => service.id === id)
+const findMember = (id) => team.find((member) => member.id === id)
+
+function openingHours(dateKey) {
+  const dayName = DAYS[parseDateKey(dateKey).getDay()]
+  const row = schedule.find((item) => item.day === dayName)
+  if (!row || row.hours === 'Cerrado') return null
+  const [open, close] = row.hours.split(' - ')
+  return { open: toMinutes(open), close: toMinutes(close) }
+}
+
 /*
-  Un campo sí necesita borde: es la única forma de que se lea como algo donde
-  se escribe. Va en el gris mínimo del sistema, no en tiza plena, para que la
-  cuadrícula de seis campos no vuelva a meter doce líneas fuertes en pantalla.
+  Demo: no hay agenda real detrás. La ocupación sale de un hash de barbero,
+  día y bloque, así que es estable (el mismo hueco está ocupado cada vez que
+  se mira) y distinta por barbero, que es lo que hace creíble elegir con quién.
 */
+function hash(text) {
+  let h = 2166136261
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+const isBlockTaken = (barberId, dateKey, start) => hash(`${barberId}|${dateKey}|${start}`) % 100 < 35
+
+// Un servicio largo ocupa varios bloques seguidos: el Ritual necesita tres
+// bloques libres, no uno. Por eso los servicios largos tienen menos horarios.
+function isBarberFree(barberId, dateKey, start, duration) {
+  for (let t = start; t < start + duration; t += SLOT_STEP) {
+    if (isBlockTaken(barberId, dateKey, t)) return false
+  }
+  return true
+}
+
+function candidatesFor(serviceId, barberId) {
+  if (barberId === ANY_BARBER) {
+    return team.filter((member) => member.services.includes(serviceId)).map((member) => member.id)
+  }
+  return [barberId]
+}
+
+function slotsFor({ date, service, barber }, now) {
+  if (!date || !service || !barber) return []
+  const hours = openingHours(date)
+  if (!hours) return []
+
+  const { duration } = findService(service)
+  const candidates = candidatesFor(service, barber)
+  const isToday = date === toDateKey(now)
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+
+  const slots = []
+  for (let start = hours.open; start + duration <= hours.close; start += SLOT_STEP) {
+    if (isToday && start <= nowMinutes) continue
+    if (candidates.some((id) => isBarberFree(id, date, start, duration))) slots.push(toHHMM(start))
+  }
+  return slots
+}
+
+function dayStatus(draft, dateKey, now) {
+  if (dateKey < toDateKey(now)) return 'past'
+  if (!openingHours(dateKey)) return 'closed'
+  if (slotsFor({ ...draft, date: dateKey }, now).length === 0) return 'full'
+  return 'open'
+}
+
+// Con "el que esté libre", el resumen nombra a quién le toca de verdad.
+function assignedMember(draft) {
+  if (draft.barber !== ANY_BARBER) return findMember(draft.barber)
+  const { duration } = findService(draft.service)
+  const start = toMinutes(draft.time)
+  return team.find(
+    (member) =>
+      member.services.includes(draft.service) && isBarberFree(member.id, draft.date, start, duration)
+  )
+}
+
+/*
+  Cambiar una elección de atrás no puede dejar un turno imposible adelante:
+  si el barbero no hace el servicio nuevo, se suelta; si la hora ya no está
+  libre con esa combinación, se suelta la hora; si el día se quedó sin lugar,
+  se suelta el día. Lo que sigue valiendo se conserva.
+*/
+function reconcile(draft, now) {
+  let next = draft
+  const member = findMember(next.barber)
+  if (member && next.service && !member.services.includes(next.service)) {
+    next = { ...next, barber: null }
+  }
+  if (next.date && dayStatus(next, next.date, now) !== 'open' && next.barber) {
+    next = { ...next, date: '', time: '' }
+  }
+  if (next.time && !slotsFor(next, now).includes(next.time)) {
+    next = { ...next, time: '' }
+  }
+  return next
+}
+
+function monthCells(year, month) {
+  const lead = (new Date(year, month, 1).getDay() + 6) % 7
+  const total = new Date(year, month + 1, 0).getDate()
+  const cells = Array.from({ length: lead }, () => null)
+  for (let day = 1; day <= total; day += 1) {
+    cells.push(`${year}-${pad(month + 1)}-${pad(day)}`)
+  }
+  return cells
+}
+
+function validate(draft) {
+  const errors = {}
+  if (draft.name.trim().length < 2) errors.name = 'Poné tu nombre para saber a quién esperamos.'
+  // Sin validar el formato exacto: los teléfonos argentinos se escriben de
+  // cinco maneras distintas y rechazar una válida cuesta más que aceptar una rara.
+  if (draft.phone.replace(/\D/g, '').length < 8) errors.phone = 'Dejanos un teléfono de contacto.'
+  return errors
+}
+
+/*
+  Tarjeta de elección. Un campo sí necesita borde, y una opción también: es lo
+  que la hace leer como algo que se toca. En chalk 3 en reposo; la elegida se
+  invierte, que es la única marca de énfasis del sistema.
+*/
+const choiceBase =
+  'border-2 text-left transition-[background-color,color,border-color,transform] duration-150 ' +
+  'ease-out-strong active:translate-y-[2px]'
+const choiceOff = 'border-chalk-3 bg-transparent text-chalk can-hover:hover:border-chalk'
+const choiceOn = 'border-chalk bg-chalk text-void'
+const choiceDisabled = 'cursor-not-allowed border-transparent text-chalk-3 active:translate-y-0'
+
 const fieldBase =
   'w-full border-2 bg-void px-4 py-3.5 font-sans text-sm text-chalk ' +
   'transition-colors duration-150 placeholder:text-chalk-2 focus:outline-none'
 
-// El input date entrega "YYYY-MM-DD" en hora local. new Date(dateStr) sin hora
-// lo interpreta en UTC, así que en Buenos Aires (UTC-3) el día de la semana
-// puede leerse corrido un día. Fijar la hora a medianoche local lo evita.
-function dayScheduleFor(dateStr) {
-  const dayName = DAYS[new Date(`${dateStr}T00:00:00`).getDay()]
-  return schedule.find((row) => row.day === dayName)
-}
-
-function validate(form, minDate, nowTime) {
-  const errors = {}
-  if (form.name.trim().length < 2) errors.name = 'Poné tu nombre para saber a quién esperamos.'
-  // Sin validar el formato exacto: los teléfonos argentinos se escriben de
-  // cinco maneras distintas y rechazar una válida cuesta más que aceptar una rara.
-  if (form.phone.replace(/\D/g, '').length < 8) errors.phone = 'Dejanos un teléfono de contacto.'
-
-  if (!form.date) {
-    errors.date = 'Elegí un día.'
-  } else if (form.date < minDate) {
-    errors.date = 'Ese día ya pasó.'
-  } else if (dayScheduleFor(form.date)?.hours === 'Cerrado') {
-    errors.date = 'Ese día cerramos, elegí otro.'
-  }
-
-  if (!form.time) {
-    errors.time = 'Elegí una hora.'
-  } else if (!errors.date) {
-    // Mismo día: una hora que ya pasó no es un turno posible aunque el
-    // día siga siendo válido.
-    if (form.date === minDate && form.time <= nowTime) {
-      errors.time = 'Esa hora ya pasó, elegí otra.'
-    } else {
-      const day = dayScheduleFor(form.date)
-      const [open, close] = day.hours.split(' - ')
-      if (form.time < open || form.time > close) {
-        errors.time = `Ese día atendemos de ${open} a ${close}.`
-      }
-    }
-  }
-
-  return errors
+// Sin color de alerta: el aviso se marca por inversión, igual que los errores.
+function Notice({ id, children }) {
+  return (
+    <span id={id} className="inline-block bg-chalk px-2 py-1 font-mono text-xs text-void">
+      {children}
+    </span>
+  )
 }
 
 function Field({ id, label, required = false, error, className = '', children }) {
@@ -100,8 +232,7 @@ function Field({ id, label, required = false, error, className = '', children })
       <label htmlFor={id} className="label">
         {label}
         {/* Asterisco visible + `required` nativo en el input: el primero avisa
-            a golpe de vista, el segundo lo anuncia a un lector de pantalla
-            antes de que el usuario llegue a enviar el formulario. */}
+            a golpe de vista, el segundo lo anuncia a un lector de pantalla. */}
         {required && (
           <span aria-hidden="true" className="text-chalk">
             {' '}
@@ -110,28 +241,17 @@ function Field({ id, label, required = false, error, className = '', children })
         )}
       </label>
       {children}
-      {/*
-        Sin color de alerta, el error se marca por inversión: el mensaje va en
-        una plancha de tiza con el tipo calado. Es la misma señal que usa la
-        acción principal, y por eso se reconoce sin necesidad de rojo.
-      */}
-      {/*
-        Solo opacity, nunca height: el sistema no anima layout (DESIGN.md
-        s7). El mensaje reserva su lugar de una y aparece con un fundido
-        rápido, coherente con que un cartel no tiene estados intermedios.
-      */}
+      {/* Solo opacity, nunca height: el sistema no anima layout (DESIGN.md s7). */}
       <AnimatePresence>
         {error && (
           <motion.p
-            id={`${id}-error`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: EASE }}
+            className="mt-1"
           >
-            <span className="mt-1 inline-block bg-chalk px-2 py-1 font-mono text-xs text-void">
-              {error}
-            </span>
+            <Notice id={`${id}-error`}>{error}</Notice>
           </motion.p>
         )}
       </AnimatePresence>
@@ -140,69 +260,476 @@ function Field({ id, label, required = false, error, className = '', children })
 }
 
 export default function Booking({ selectedService }) {
-  const [form, setForm] = useState(emptyForm)
+  const reduced = useReducedMotionPolicy()
+  const now = new Date()
+  const todayKey = toDateKey(now)
+  const todayName = DAYS[now.getDay()]
+
+  const [draft, setDraft] = useState(emptyDraft)
+  const [step, setStep] = useState(0)
+  const [view, setView] = useState(() => ({ year: now.getFullYear(), month: now.getMonth() }))
   const [errors, setErrors] = useState({})
   const [status, setStatus] = useState('idle') // idle | sending | sent
+  // Quiso avanzar sin elegir: el aviso de qué falta sube a plancha invertida.
+  const [blocked, setBlocked] = useState(false)
+  // La hora elegida se ocupó (o pasó) mientras completaba sus datos.
+  const [slotLost, setSlotLost] = useState(false)
+
+  const direction = useRef(1)
+  const pendingFocus = useRef(false)
+  const headingRef = useRef(null)
+  const wizardRef = useRef(null)
 
   // Quien elige un servicio en La carta no debería tener que volver a
-  // buscarlo acá: el clic en esa fila manda el id hasta este formulario.
+  // buscarlo acá: llega con el servicio puesto y directo a elegir barbero.
   useEffect(() => {
-    if (selectedService) {
-      setForm((prev) => ({ ...prev, service: selectedService }))
-    }
+    if (!selectedService) return
+    setDraft((prev) => reconcile({ ...prev, service: selectedService.id }, new Date()))
+    setStatus('idle')
+    setBlocked(false)
+    direction.current = 1
+    setStep(1)
   }, [selectedService])
 
-  const reduced = useReducedMotionPolicy()
-  const today = new Date()
-  const todayName = DAYS[today.getDay()]
-  // Fecha y hora locales, no toISOString(): esa conversión pasa por UTC, y en
-  // Buenos Aires (UTC-3) después de las 21:00 ya cae en el día siguiente,
-  // así que bloquearía reservar para hoy en el propio horario nocturno.
-  const pad = (n) => String(n).padStart(2, '0')
-  const minDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
-  const nowTime = `${pad(today.getHours())}:${pad(today.getMinutes())}`
+  // Al cambiar de paso el foco va al título del paso nuevo: un lector de
+  // pantalla anuncia dónde quedó, y el tabulador sigue desde ahí y no desde
+  // un botón que ya no existe. En la primera carga no se mueve nada.
+  useEffect(() => {
+    if (!pendingFocus.current) return
+    pendingFocus.current = false
+    headingRef.current?.focus({ preventScroll: true })
+  }, [step, status])
+
+  const service = findService(draft.service)
+  const slots = slotsFor(draft, now)
+  const ready = [Boolean(draft.service), Boolean(draft.barber), Boolean(draft.date && draft.time), true]
+  const maxReachable = ready.findIndex((isReady) => !isReady)
+
+  const goTo = (index) => {
+    direction.current = index > step ? 1 : -1
+    pendingFocus.current = true
+    setBlocked(false)
+    setStep(index)
+    // Si el usuario bajó hasta los horarios, el paso nuevo empieza arriba de
+    // la pantalla: se lo trae de vuelta en vez de dejarlo mirando el pie.
+    if ((wizardRef.current?.getBoundingClientRect().top ?? 0) < 0) {
+      scrollToId('turno-asistente', { offset: -96 })
+    }
+  }
+
+  const choose = (patch) => {
+    setDraft((prev) => reconcile({ ...prev, ...patch }, new Date()))
+    setBlocked(false)
+    setSlotLost(false)
+  }
 
   const update = (field) => (event) => {
     const { value } = event.target
-    setForm((prev) => ({ ...prev, [field]: value }))
-    // Validación en línea: el error se va en cuanto el usuario lo corrige, sin
-    // esperar a que reenvíe. Solo se limpia, nunca se añade mientras escribe.
+    setDraft((prev) => ({ ...prev, [field]: value }))
+    // Validación en línea: el error se va en cuanto el usuario lo corrige.
     setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
-    // Si ya había un turno confirmado, empezar a completar uno nuevo retira
-    // ese aviso: si no, queda diciendo "recibimos tu pedido" bajo un formulario
-    // que el usuario está llenando de nuevo, y eso mezcla el estado viejo con
-    // el que está armando ahora.
-    setStatus((prev) => (prev === 'sent' ? 'idle' : prev))
   }
 
-  // Demo: no hay backend ni WhatsApp real detrás de este formulario. En un
-  // sitio real, esto abriría WhatsApp con el pedido ya redactado.
+  const next = () => {
+    if (!ready[step]) {
+      setBlocked(true)
+      return
+    }
+    goTo(step + 1)
+  }
+
+  const shiftMonth = (delta) => {
+    setView(({ year, month }) => {
+      const date = new Date(year, month + delta, 1)
+      return { year: date.getFullYear(), month: date.getMonth() }
+    })
+  }
+
+  // Demo: no hay backend ni WhatsApp real detrás. En un sitio real, esto
+  // abriría WhatsApp con el turno ya redactado.
   const handleSubmit = (event) => {
     event.preventDefault()
-    const found = validate(form, minDate, nowTime)
-    setErrors(found)
+    if (step < 3) {
+      next()
+      return
+    }
 
+    if (!slotsFor(draft, new Date()).includes(draft.time)) {
+      setDraft((prev) => ({ ...prev, time: '' }))
+      setSlotLost(true)
+      goTo(2)
+      return
+    }
+
+    const found = validate(draft)
+    setErrors(found)
     if (Object.keys(found).length > 0) {
       document.getElementById(Object.keys(found)[0])?.focus()
       return
     }
 
     setStatus('sending')
-
-    // Sin el retraso, React agrupa los tres cambios de estado del handler en
-    // un solo render y salta directo a "sent": el usuario nunca ve "Enviando"
-    // y el botón pasa de reposo a confirmado sin marcar que el pedido se
-    // está procesando.
+    // Sin el retraso, React agrupa los cambios en un solo render y el usuario
+    // nunca ve "Enviando": el botón salta de reposo a confirmado.
     window.setTimeout(() => {
-      setForm(emptyForm)
+      pendingFocus.current = true
       setStatus('sent')
     }, 900)
   }
 
-  // El campo con error sube a tiza plena: contra el gris de los demás, la fila
-  // rota salta a la vista sin necesidad de un color dedicado.
+  const startOver = () => {
+    setDraft(emptyDraft)
+    setErrors({})
+    setSlotLost(false)
+    setStatus('idle')
+    direction.current = -1
+    pendingFocus.current = true
+    setStep(0)
+  }
+
   const fieldClass = (field) =>
     `${fieldBase} ${errors[field] ? 'border-chalk' : 'border-chalk-3 focus:border-chalk'}`
+
+  const viewIndex = view.year * 12 + view.month
+  const todayIndex = now.getFullYear() * 12 + now.getMonth()
+  const hints = [
+    'Elegí un servicio para seguir.',
+    'Elegí con quién para seguir.',
+    draft.date ? 'Elegí una hora para seguir.' : 'Elegí un día para seguir.',
+  ]
+
+  const stepTitle = (text, context) => (
+    <div className="mb-8">
+      <h3
+        ref={headingRef}
+        id="turno-paso-titulo"
+        tabIndex={-1}
+        className="text-2xl leading-none tracking-[-0.02em] text-chalk focus:outline-none md:text-4xl"
+      >
+        {text}
+      </h3>
+      {context && <p className="label mt-3">{context}</p>}
+    </div>
+  )
+
+  const renderService = () => (
+    <>
+      {stepTitle('Qué te hacés')}
+      <ul className="grid gap-3 sm:grid-cols-2" aria-labelledby="turno-paso-titulo">
+        {services.map((item, i) => {
+          const selected = draft.service === item.id
+          const muted = selected ? 'text-void/70' : 'text-chalk-2'
+          return (
+            <li key={item.id}>
+              <button
+                type="button"
+                aria-pressed={selected}
+                onClick={() => choose({ service: item.id })}
+                className={`${choiceBase} flex h-full w-full flex-col gap-5 p-5 ${selected ? choiceOn : choiceOff}`}
+              >
+                <span className="flex items-baseline justify-between gap-4">
+                  <span className={`font-mono text-xs tabular-nums ${muted}`}>{pad(i + 1)}</span>
+                  {item.featured && (
+                    <span className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em]">
+                      Más pedido
+                    </span>
+                  )}
+                </span>
+                <span className="font-display text-xl uppercase leading-none">{item.name}</span>
+                <span className="mt-auto flex items-baseline justify-between gap-4 font-mono text-xs tabular-nums">
+                  <span className={muted}>{item.duration} min</span>
+                  <span>{formatPrice(item.price)}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </>
+  )
+
+  const renderBarber = () => {
+    const options = [
+      { id: ANY_BARBER, name: 'El que esté libre', role: 'Más horarios para elegir' },
+      ...team,
+    ]
+    return (
+      <>
+        {stepTitle('Con quién', `${service.name} · ${service.duration} min`)}
+        <ul className="grid gap-3 sm:grid-cols-2" aria-labelledby="turno-paso-titulo">
+          {options.map((member) => {
+            const selected = draft.barber === member.id
+            const available =
+              member.id === ANY_BARBER
+                ? team.some((m) => m.services.includes(draft.service))
+                : member.services.includes(draft.service)
+            const state = selected ? choiceOn : available ? choiceOff : choiceDisabled
+            return (
+              <li key={member.id}>
+                <button
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={!available}
+                  onClick={() => choose({ barber: member.id })}
+                  className={`${choiceBase} flex w-full items-center gap-4 p-3 ${state}`}
+                >
+                  <span
+                    className={`relative h-16 w-16 shrink-0 overflow-hidden bg-void-2 ${available ? '' : 'opacity-40'}`}
+                  >
+                    {member.photo ? (
+                      <picture>
+                        <source srcSet={member.photoWebp} type="image/webp" />
+                        <img
+                          src={member.photo}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover grayscale contrast-125"
+                        />
+                      </picture>
+                    ) : (
+                      <span aria-hidden="true" className="placeholder-art block h-full w-full" />
+                    )}
+                  </span>
+                  <span className="flex min-w-0 flex-col gap-2">
+                    <span className="font-display text-lg uppercase leading-none">{member.name}</span>
+                    <span
+                      className={`font-mono text-[0.68rem] uppercase tracking-[0.14em] ${
+                        selected ? 'text-void/70' : available ? 'text-chalk-2' : ''
+                      }`}
+                    >
+                      {available ? member.role : 'No hace este servicio'}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </>
+    )
+  }
+
+  const renderWhen = () => {
+    const barberName =
+      draft.barber === ANY_BARBER ? 'El que esté libre' : findMember(draft.barber)?.name
+    return (
+      <>
+        {stepTitle('Cuándo', `${service.name} · ${barberName}`)}
+
+        {slotLost && (
+          <p role="alert" className="mb-8">
+            <Notice>Esa hora se ocupó mientras completabas los datos. Elegí otra.</Notice>
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-4">
+          <p className="font-display text-xl uppercase leading-none" aria-live="polite">
+            {MONTHS[view.month]} {view.year}
+          </p>
+          <div className="flex gap-2">
+            {[
+              { delta: -1, label: 'Mes anterior', glyph: '←', disabled: viewIndex <= todayIndex },
+              { delta: 1, label: 'Mes siguiente', glyph: '→', disabled: viewIndex >= todayIndex + MONTHS_AHEAD },
+            ].map((nav) => (
+              <button
+                key={nav.delta}
+                type="button"
+                aria-label={nav.label}
+                disabled={nav.disabled}
+                onClick={() => shiftMonth(nav.delta)}
+                className={`${choiceBase} flex h-11 w-11 items-center justify-center font-mono text-sm ${
+                  nav.disabled ? choiceDisabled : choiceOff
+                }`}
+              >
+                <span aria-hidden="true">{nav.glyph}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {CLOSED_DAYS_LABEL && <p className="label mt-3">Cerramos {CLOSED_DAYS_LABEL}</p>}
+
+        <div className="mt-6 grid grid-cols-7 gap-1 sm:gap-2">
+          {WEEKDAYS_SHORT.map((day) => (
+            <span key={day} aria-hidden="true" className="label pb-1 text-center">
+              {day}
+            </span>
+          ))}
+          {monthCells(view.year, view.month).map((key, i) => {
+            if (!key) return <span key={`vacío-${i}`} aria-hidden="true" />
+            const statusKey = dayStatus(draft, key, now)
+            const disabled = statusKey !== 'open'
+            const selected = draft.date === key
+            const state = selected ? choiceOn : disabled ? choiceDisabled : choiceOff
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={disabled}
+                aria-pressed={selected}
+                aria-label={`${formatLongDate(key)}${disabled ? `, ${DAY_STATUS_LABEL[statusKey].toLowerCase()}` : ''}`}
+                onClick={() => {
+                  if (!selected) choose({ date: key, time: '' })
+                }}
+                className={`${choiceBase} relative flex h-14 flex-col items-center justify-center gap-1 text-center font-mono tabular-nums sm:h-20 ${state}`}
+              >
+                <span className="text-sm sm:text-base">{Number(key.slice(8))}</span>
+                {/* En un teléfono no entra la palabra: el día apagado y el
+                    aria-label ya dicen que no se puede. */}
+                {disabled && (
+                  <span className="hidden text-[0.55rem] uppercase tracking-[0.1em] sm:block">
+                    {DAY_STATUS_LABEL[statusKey]}
+                  </span>
+                )}
+                {/* El marcador de hoy es estado real, igual que en "Horario". */}
+                {key === todayKey && (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute left-1.5 top-1.5 h-1.5 w-1.5 ${selected ? 'bg-void' : disabled ? 'bg-chalk-3' : 'bg-chalk'}`}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {draft.date ? (
+          <div className="mt-12">
+            <p className="label text-chalk">Horarios del {formatLongDate(draft.date)}</p>
+            {PERIODS.map((period) => {
+              const list = slots.filter((time) => period.test(toMinutes(time)))
+              if (list.length === 0) return null
+              return (
+                <div key={period.id} className="mt-6">
+                  <p className="label" id={`franja-${period.id}`}>
+                    {period.label}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2" role="group" aria-labelledby={`franja-${period.id}`}>
+                    {list.map((time) => {
+                      const selected = draft.time === time
+                      return (
+                        <button
+                          key={time}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => choose({ time })}
+                          className={`${choiceBase} min-w-[4.5rem] px-4 py-3 text-center font-mono text-sm tabular-nums ${
+                            selected ? choiceOn : choiceOff
+                          }`}
+                        >
+                          {time}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="mt-10 text-sm text-chalk-2">Elegí un día y te mostramos los horarios libres.</p>
+        )}
+      </>
+    )
+  }
+
+  const renderConfirm = () => {
+    const member = assignedMember(draft)
+    const summary = [
+      ['Servicio', service.name],
+      ['Barbero', draft.barber === ANY_BARBER ? `${member?.name} (el que estaba libre)` : member?.name],
+      ['Día', formatLongDate(draft.date)],
+      ['Hora', draft.time],
+      ['Duración', `${service.duration} min`],
+      ['Precio', formatPrice(service.price)],
+    ]
+    return (
+      <>
+        {stepTitle('Revisá y confirmá')}
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-3">
+          {summary.map(([label, value]) => (
+            <div key={label}>
+              <dt className="label">{label}</dt>
+              <dd className="mt-2 font-mono text-sm text-chalk first-letter:uppercase">{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <fieldset className="m-0 mt-14 min-w-0 border-0 p-0">
+          <legend className="label mb-7 block w-full p-0 text-chalk">Tus datos</legend>
+          <div className="grid gap-7 sm:grid-cols-2">
+            <Field id="name" label="Nombre" required error={errors.name}>
+              <input
+                id="name"
+                type="text"
+                autoComplete="name"
+                maxLength={80}
+                required
+                placeholder="Cómo te llamás"
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? 'name-error' : undefined}
+                className={fieldClass('name')}
+                value={draft.name}
+                onChange={update('name')}
+              />
+            </Field>
+
+            <Field id="phone" label="Teléfono" required error={errors.phone}>
+              <input
+                id="phone"
+                type="tel"
+                autoComplete="tel"
+                maxLength={20}
+                required
+                placeholder="11 2222 3333"
+                aria-invalid={Boolean(errors.phone)}
+                aria-describedby={errors.phone ? 'phone-error' : undefined}
+                className={fieldClass('phone')}
+                value={draft.phone}
+                onChange={update('phone')}
+              />
+            </Field>
+
+            <Field id="notes" label="Algo que debamos saber (opcional)" className="sm:col-span-2">
+              <textarea
+                id="notes"
+                rows="3"
+                maxLength={400}
+                placeholder="Alergias, referencia de corte, si venís con un chico"
+                className={`${fieldClass('notes')} resize-none`}
+                value={draft.notes}
+                onChange={update('notes')}
+              />
+            </Field>
+          </div>
+        </fieldset>
+      </>
+    )
+  }
+
+  const renderSent = () => {
+    const member = assignedMember(draft)
+    return (
+      <>
+        {stepTitle('Turno pedido')}
+        <div role="status" className="bg-chalk px-5 py-5 text-void">
+          <p className="font-mono text-sm leading-relaxed">
+            {service.name} con {member?.name}, {formatLongDate(draft.date)} a las {draft.time}.
+          </p>
+          <p className="mt-3 text-sm leading-relaxed">
+            Es una demo, así que no se envía a ningún lado de verdad: en un sitio real esto abriría
+            WhatsApp con el turno ya redactado.
+          </p>
+        </div>
+        <Button type="button" variant="ghost" className="mt-8" onClick={startOver}>
+          Sacar otro turno
+        </Button>
+      </>
+    )
+  }
+
+  const renderers = [renderService, renderBarber, renderWhen, renderConfirm]
+  const sent = status === 'sent'
 
   return (
     <section id="reserva" className="bg-void">
@@ -210,226 +737,160 @@ export default function Booking({ selectedService }) {
         <SectionHeading
           title="Sacá tu turno"
           meta="Confirmamos por WhatsApp"
-          subtitle="Completá los datos y te escribimos en un rato para confirmarte."
+          subtitle="Servicio, barbero, día y hora. Elegís sobre los horarios libres y te confirmamos por WhatsApp."
           className="max-w-4xl"
         />
       </div>
 
-      <div className="shell grid gap-20 pb-24 md:pb-32 lg:grid-cols-[1.5fr_1fr] lg:gap-24">
+      <div className="shell grid gap-20 pb-24 md:pb-32 lg:grid-cols-[1.8fr_1fr] lg:gap-24">
         <Reveal>
-          {/* Mismo aviso que el resto de la página, pero acá llega antes de que
-              alguien escriba su nombre y teléfono, no después de enviarlos:
-              es el único punto donde el aviso corría detrás del dato en vez
-              de delante. */}
-          <p className="label">Formulario de demostración, no se envía a ningún lado real</p>
-          <p className="label mt-2">Campos con * son obligatorios</p>
-          {/* P1: antes vivía solo en la columna de horarios, que en móvil
-              cae después de todo el formulario (grid a una columna bajo
-              1024px). Quien completaba el día ahí no se enteraba de qué día
-              cerramos hasta el error al enviar. Va acá, antes del campo, y
-              además queda enlazado al input por aria-describedby más abajo. */}
-          {CLOSED_DAYS_LABEL && (
-            <p id="closed-days-hint" className="label mt-2">
-              Cerramos {CLOSED_DAYS_LABEL}
-            </p>
-          )}
-          {/*
-            Dos grupos, no siete campos sueltos: "Vos" (quién sos) y "Turno"
-            (qué querés y cuándo). El <fieldset> es la agrupación semántica
-            correcta para un lector de pantalla; el <legend> reusa el mismo
-            vocabulario mono de las etiquetas de la columna de al lado
-            ("Horario", "Dónde estamos"), así que no suma lenguaje visual
-            nuevo. `min-w-0` porque un <fieldset> trae un mínimo intrínseco
-            propio del navegador que, sin esto, puede desbordar la grilla en
-            pantallas angostas.
-          */}
-          <form onSubmit={handleSubmit} noValidate className="mt-4 flex flex-col gap-12">
-            <fieldset className="m-0 min-w-0 border-0 p-0">
-              <legend className="label mb-7 block w-full p-0">Vos</legend>
-              <div className="grid gap-7 sm:grid-cols-2">
-                <Field id="name" label="Nombre" required error={errors.name}>
-                  <input
-                    id="name"
-                    type="text"
-                    autoComplete="name"
-                    maxLength={80}
-                    required
-                    placeholder="Cómo te llamás"
-                    aria-invalid={Boolean(errors.name)}
-                    aria-describedby={errors.name ? 'name-error' : undefined}
-                    className={fieldClass('name')}
-                    value={form.name}
-                    onChange={update('name')}
-                  />
-                </Field>
+          {/* El aviso de demo llega antes de que alguien escriba su nombre y
+              teléfono, no después de enviarlos. */}
+          <p className="label">Turnero de demostración, no se envía a ningún lado real</p>
 
-                <Field id="phone" label="Teléfono" required error={errors.phone}>
-                  <input
-                    id="phone"
-                    type="tel"
-                    autoComplete="tel"
-                    maxLength={20}
-                    required
-                    placeholder="11 2222 3333"
-                    aria-invalid={Boolean(errors.phone)}
-                    aria-describedby={errors.phone ? 'phone-error' : undefined}
-                    className={fieldClass('phone')}
-                    value={form.phone}
-                    onChange={update('phone')}
-                  />
-                </Field>
-              </div>
-            </fieldset>
-
-            <fieldset className="m-0 min-w-0 border-0 p-0">
-              <legend className="label mb-7 block w-full p-0">Turno</legend>
-
-              {/* "Qué" y "Cuándo" son dos decisiones distintas, no cuatro
-                  campos sueltos: primero el servicio y con quién, después el
-                  día y la hora. Fieldsets anidados son HTML válido y un
-                  lector de pantalla los anuncia encadenados ("Turno, Qué,
-                  Servicio"), así que el agrupamiento no se pierde, se precisa. */}
-              <div className="flex flex-col gap-10">
-                <fieldset className="m-0 min-w-0 border-0 p-0">
-                  <legend className="label mb-4 block w-full p-0">Qué</legend>
-                  <div className="grid gap-7 sm:grid-cols-2">
-                    <Field id="service" label="Servicio">
-                      <select
-                        id="service"
-                        className={fieldClass('service')}
-                        value={form.service}
-                        onChange={update('service')}
-                      >
-                        {services.map((service) => (
-                          <option key={service.id} value={service.id}>
-                            {service.name} ({formatPrice(service.price)})
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-
-                    <Field id="barber" label="Barbero">
-                      <select
-                        id="barber"
-                        className={fieldClass('barber')}
-                        value={form.barber}
-                        onChange={update('barber')}
-                      >
-                        <option value="cualquiera">El que esté libre</option>
-                        {team.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  </div>
-                </fieldset>
-
-                <fieldset className="m-0 min-w-0 border-0 p-0">
-                  <legend className="label mb-4 block w-full p-0">Cuándo</legend>
-                  <div className="grid gap-7 sm:grid-cols-2">
-                    <Field id="date" label="Día" required error={errors.date}>
-                      <input
-                        id="date"
-                        type="date"
-                        min={minDate}
-                        required
-                        aria-invalid={Boolean(errors.date)}
-                        aria-describedby={errors.date ? 'date-error closed-days-hint' : 'closed-days-hint'}
-                        className={`${fieldClass('date')} [color-scheme:dark]`}
-                        value={form.date}
-                        onChange={update('date')}
+          <form
+            id="turno-asistente"
+            ref={wizardRef}
+            onSubmit={handleSubmit}
+            noValidate
+            className="mt-8"
+            aria-labelledby="turno-paso-titulo"
+          >
+            {/* Progreso: cada tramo es un control (vuelve a un paso ya hecho),
+                no una regla de retícula. Hecho y actual en tiza, pendiente en
+                chalk 3. */}
+            <ol className="grid grid-cols-4 gap-2">
+              {STEPS.map((label, i) => {
+                const current = !sent && i === step
+                const done = sent || i < step
+                const reachable = !sent && i <= maxReachable && i !== step
+                return (
+                  <li key={label}>
+                    <button
+                      type="button"
+                      disabled={!reachable}
+                      aria-current={current ? 'step' : undefined}
+                      onClick={() => goTo(i)}
+                      className="group flex w-full flex-col gap-3 pb-2 text-left disabled:cursor-default"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`block h-[2px] w-full transition-colors duration-150 ${
+                          current || done ? 'bg-chalk' : 'bg-chalk-3'
+                        }`}
                       />
-                    </Field>
+                      <span
+                        className={`flex flex-col gap-1 font-mono text-[0.68rem] uppercase tracking-[0.14em] transition-colors duration-150 sm:flex-row sm:gap-2 ${
+                          current
+                            ? 'font-bold text-chalk'
+                            : done || reachable
+                              ? 'text-chalk-2 can-hover:group-enabled:group-hover:text-chalk'
+                              : 'text-chalk-3'
+                        }`}
+                      >
+                        <span className="tabular-nums">{pad(i + 1)}</span>
+                        <span>{label}</span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ol>
 
-                    <Field id="time" label="Hora" required error={errors.time}>
-                      <input
-                        id="time"
-                        type="time"
-                        required
-                        aria-invalid={Boolean(errors.time)}
-                        aria-describedby={errors.time ? 'time-error' : undefined}
-                        className={`${fieldClass('time')} [color-scheme:dark]`}
-                        value={form.time}
-                        onChange={update('time')}
-                      />
-                    </Field>
-                  </div>
-                </fieldset>
+            {/* Sin salida animada: el paso nuevo tiene que existir en el mismo
+                render para recibir el foco. Entra con un fundido corto que se
+                corre hacia el lado al que se avanzó. */}
+            <motion.div
+              key={sent ? 'sent' : step}
+              initial={
+                reduced
+                  ? { opacity: 0 }
+                  : { opacity: 0, transform: `translateX(${direction.current * 12}px)` }
+              }
+              animate={{ opacity: 1, transform: 'translateX(0px)' }}
+              transition={{ duration: 0.22, ease: EASE }}
+              className="mt-12"
+            >
+              {sent ? renderSent() : renderers[step]()}
+            </motion.div>
+
+            {!sent && (
+              <div className="mt-14 flex flex-wrap items-end justify-between gap-6">
+                {step > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => goTo(step - 1)}
+                    className="py-3 font-mono text-xs uppercase tracking-[0.14em] text-chalk-2 transition-colors duration-150 can-hover:hover:text-chalk"
+                  >
+                    <span aria-hidden="true">← </span>
+                    Volver
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                <div className="ml-auto flex flex-col items-end gap-3 text-right">
+                  <p aria-live="polite" className="min-h-6">
+                    {step < 3 && !ready[step] && (
+                      blocked ? (
+                        <Notice id="turno-falta">{hints[step]}</Notice>
+                      ) : (
+                        <span id="turno-falta" className="font-mono text-xs text-chalk-2">
+                          {hints[step]}
+                        </span>
+                      )
+                    )}
+                  </p>
+
+                  {step < 3 ? (
+                    <Button
+                      type="button"
+                      variant={ready[step] ? 'primary' : 'inert'}
+                      aria-disabled={!ready[step]}
+                      aria-describedby={ready[step] ? undefined : 'turno-falta'}
+                      onClick={next}
+                    >
+                      {NEXT_LABELS[step]}
+                      <span aria-hidden="true" className="ml-3">→</span>
+                    </Button>
+                  ) : (
+                    <Button type="submit" disabled={status === 'sending'}>
+                      {/* El desenfoque tapa el cruce entre las dos etiquetas:
+                          sin él se ven dos textos superpuestos. */}
+                      <motion.span
+                        key={status}
+                        initial={reduced ? false : { opacity: 0, filter: 'blur(3px)' }}
+                        animate={{ opacity: 1, filter: 'blur(0px)' }}
+                        transition={{ duration: 0.18, ease: EASE }}
+                        className="block"
+                      >
+                        {status === 'sending' ? 'Enviando' : 'Confirmar turno'}
+                      </motion.span>
+                    </Button>
+                  )}
+                </div>
               </div>
+            )}
 
-              {/* Ni "qué" ni "cuándo": una nota libre no pertenece a
-                  ninguna de las dos preguntas, así que queda fuera de ambos
-                  subgrupos en vez de forzarla en uno. */}
-              <div className="mt-10">
-                <Field id="notes" label="Algo que debamos saber (opcional)">
-                  <textarea
-                    id="notes"
-                    rows="3"
-                    maxLength={400}
-                    placeholder="Alergias, referencia de corte, si venís con un chico"
-                    className={`${fieldClass('notes')} resize-none`}
-                    value={form.notes}
-                    onChange={update('notes')}
-                  />
-                </Field>
-              </div>
-            </fieldset>
-
-            <div>
-              <Button type="submit" disabled={status === 'sending'}>
-                {/*
-                  El desenfoque tapa el cruce entre las dos etiquetas: sin él
-                  se ven dos textos superpuestos durante el cambio, y eso se
-                  lee como un fallo de render.
-                */}
-                <motion.span
-                  key={status}
-                  initial={reduced ? false : { opacity: 0, filter: 'blur(3px)' }}
-                  animate={{ opacity: 1, filter: 'blur(0px)' }}
-                  transition={{ duration: 0.18, ease: EASE }}
-                  className="block"
-                >
-                  {status === 'sending' ? 'Enviando' : 'Enviar solicitud'}
-                </motion.span>
-              </Button>
-
-              {/* Justo antes de mandar sus datos es cuando un primerizo más
-                  se pregunta si esto vale la pena y qué pasa si algo cambia.
-                  Una cifra que ya probó su valor arriba y una respuesta a esa
-                  segunda pregunta, las dos a mano en el mismo momento. */}
-              {YEARS_STAT && RATING_STAT && (
-                <p className="mt-5 font-mono text-xs tabular-nums text-chalk-2">
-                  <span className="text-chalk">{formatStat(YEARS_STAT.to, YEARS_STAT.decimals)}</span>{' '}
-                  {YEARS_STAT.label}
-                  <span aria-hidden="true"> · </span>
-                  <span className="text-chalk">{formatStat(RATING_STAT.to, RATING_STAT.decimals)}</span>{' '}
-                  {RATING_STAT.label}
+            {/* Justo antes de confirmar es cuando un primerizo más se pregunta
+                si vale la pena y qué pasa si algo cambia. */}
+            {step === 3 && !sent && (
+              <div className="mt-6 flex flex-col items-end text-right">
+                {YEARS_STAT && RATING_STAT && (
+                  <p className="font-mono text-xs tabular-nums text-chalk-2">
+                    <span className="text-chalk">{formatStat(YEARS_STAT.to, YEARS_STAT.decimals)}</span>{' '}
+                    {YEARS_STAT.label}
+                    <span aria-hidden="true"> · </span>
+                    <span className="text-chalk">{formatStat(RATING_STAT.to, RATING_STAT.decimals)}</span>{' '}
+                    {RATING_STAT.label}
+                  </p>
+                )}
+                <p className="mt-3 max-w-sm text-sm leading-relaxed text-chalk-2">
+                  Confirmamos por WhatsApp el mismo día. Si no podés venir, avisanos y reprogramamos
+                  sin cargo.
                 </p>
-              )}
-              <p className="mt-3 max-w-sm text-sm leading-relaxed text-chalk-2">
-                Confirmamos por WhatsApp el mismo día. Si no podés venir, avisanos
-                y reprogramamos sin cargo.
-              </p>
-            </div>
-
-            <AnimatePresence>
-              {status === 'sent' && (
-                <motion.p
-                  role="status"
-                  initial={{ opacity: 0, transform: 'translateY(-8px)' }}
-                  animate={{ opacity: 1, transform: 'translateY(0px)' }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: EASE }}
-                  className="bg-chalk px-5 py-4 text-sm leading-relaxed text-void"
-                >
-                  Recibimos tu pedido de turno. Es una demo, así que no se envía a
-                  ningún lado de verdad: en un sitio real esto abriría WhatsApp con
-                  los datos que completaste.
-                </motion.p>
-              )}
-            </AnimatePresence>
+              </div>
+            )}
           </form>
         </Reveal>
 
@@ -454,9 +915,7 @@ export default function Booking({ selectedService }) {
                     {isToday && <span className="h-1.5 w-1.5 shrink-0 bg-chalk" />}
                     {row.day}
                   </span>
-                  <span className={isClosed ? 'text-chalk-3' : 'tabular-nums'}>
-                    {row.hours}
-                  </span>
+                  <span className={isClosed ? 'text-chalk-3' : 'tabular-nums'}>{row.hours}</span>
                 </li>
               )
             })}
@@ -464,11 +923,8 @@ export default function Booking({ selectedService }) {
 
           <h3 className="label mt-12">Dónde estamos</h3>
           <p className="mt-4 text-sm text-chalk-2">{business.address}</p>
-          {/* <button>, no <a href="#">: un href real, aunque apunte a la
-              propia página, es un destino que el clic derecho ("abrir en
-              pestaña nueva"), el clic del medio o arrastrar el enlace pueden
-              seguir sin pasar por el `onClick` y, con él, sin el aviso de
-              demo. Un botón no tiene esos caminos alternativos. */}
+          {/* <button>, no <a href="#">: sin un href real no hay destino que el
+              clic derecho o el clic del medio puedan seguir sin el aviso. */}
           <button
             type="button"
             onClick={() => {
@@ -480,11 +936,7 @@ export default function Booking({ selectedService }) {
           </button>
 
           <h3 className="label mt-12">Contacto directo</h3>
-          {/* py-2 en los botones: en móvil son el objetivo táctil principal de
-              esta columna y con solo la altura de línea se quedan en 20px.
-              <button>, no <a href="#">: sin un `href` real detrás no hay
-              destino que un clic derecho, el clic del medio o arrastrar el
-              enlace puedan seguir saltándose el aviso de demo. */}
+          {/* py-2: en móvil son el objetivo táctil principal de esta columna. */}
           <p className="mt-2 flex flex-col font-mono text-sm">
             <button
               type="button"

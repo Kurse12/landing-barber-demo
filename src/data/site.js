@@ -148,6 +148,9 @@ export const team = [
     photo: marcoImg,
     photoWebp: marcoImgWebp,
     instagram: 'https://instagram.com/marco.barber',
+    // Ids de `services` que hace. El asistente de turnos atenúa a quien no
+    // hace el servicio elegido, en vez de dejar pedir un turno imposible.
+    services: ['corte', 'corte-barba', 'barba', 'ritual'],
   },
   {
     id: 'lucia',
@@ -157,6 +160,7 @@ export const team = [
     photo: luciaImg,
     photoWebp: luciaImgWebp,
     instagram: 'https://instagram.com/lucia.fades',
+    services: ['corte', 'corte-barba', 'nino', 'tinte'],
   },
   {
     id: 'omar',
@@ -166,6 +170,7 @@ export const team = [
     photo: omarImg,
     photoWebp: omarImgWebp,
     instagram: 'https://instagram.com/omar.blade',
+    services: ['corte', 'corte-barba', 'barba', 'nino', 'ritual'],
   },
 ]
 
