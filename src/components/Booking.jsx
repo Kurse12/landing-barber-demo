@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { business, formatPrice, schedule, services, stats, team } from '../data/site'
 import { useReducedMotionPolicy } from '../hooks/useMotionPolicy'
+import { submitBooking } from '../lib/booking'
 import { showDemoToast } from '../lib/demoToast'
 import { scrollToId } from '../lib/scroll'
 import Button from './ui/Button'
@@ -60,6 +61,7 @@ const emptyDraft = {
   date: '',
   time: '',
   name: '',
+  email: '',
   phone: '',
   notes: '',
 }
@@ -196,6 +198,13 @@ function monthCells(year, month) {
 function validate(draft) {
   const errors = {}
   if (draft.name.trim().length < 2) errors.name = 'Poné tu nombre para saber a quién esperamos.'
+  // Chequeo de forma, no de existencia: que tenga algo, arroba, dominio y
+  // punto. Si el mail no existe, eso lo dice la API al mandar la confirmación.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
+    errors.email = draft.email.trim()
+      ? 'Ese mail no parece completo, revisalo.'
+      : 'Dejanos tu mail: ahí te llega la confirmación.'
+  }
   // Sin validar el formato exacto: los teléfonos argentinos se escriben de
   // cinco maneras distintas y rechazar una válida cuesta más que aceptar una rara.
   if (draft.phone.replace(/\D/g, '').length < 8) errors.phone = 'Dejanos un teléfono de contacto.'
@@ -275,6 +284,8 @@ export default function Booking({ selectedService }) {
   const [blocked, setBlocked] = useState(false)
   // La hora elegida se ocupó (o pasó) mientras completaba sus datos.
   const [slotLost, setSlotLost] = useState(false)
+  // La API rechazó el pedido: se avisa y se deja reintentar con todo cargado.
+  const [submitError, setSubmitError] = useState('')
 
   const direction = useRef(1)
   const pendingFocus = useRef(false)
@@ -348,9 +359,9 @@ export default function Booking({ selectedService }) {
     })
   }
 
-  // Demo: no hay backend ni WhatsApp real detrás. En un sitio real, esto
-  // abriría WhatsApp con el turno ya redactado.
-  const handleSubmit = (event) => {
+  // El envío real vive en lib/booking.js: hoy simula, mañana llama a la API
+  // que manda la confirmación por mail.
+  const handleSubmit = async (event) => {
     event.preventDefault()
     if (step < 3) {
       next()
@@ -372,12 +383,28 @@ export default function Booking({ selectedService }) {
     }
 
     setStatus('sending')
-    // Sin el retraso, React agrupa los cambios en un solo render y el usuario
-    // nunca ve "Enviando": el botón salta de reposo a confirmado.
-    window.setTimeout(() => {
+    setSubmitError('')
+    const member = assignedMember(draft)
+    try {
+      await submitBooking({
+        service: draft.service,
+        barber: member?.id ?? null,
+        anyBarber: draft.barber === ANY_BARBER,
+        date: draft.date,
+        time: draft.time,
+        duration: service.duration,
+        price: service.price,
+        name: draft.name.trim(),
+        email: draft.email.trim(),
+        phone: draft.phone.trim(),
+        notes: draft.notes.trim(),
+      })
       pendingFocus.current = true
       setStatus('sent')
-    }, 900)
+    } catch {
+      setStatus('idle')
+      setSubmitError('No pudimos reservar el turno. Probá de nuevo en un momento.')
+    }
   }
 
   const startOver = () => {
@@ -671,9 +698,12 @@ export default function Booking({ selectedService }) {
           ))}
         </dl>
 
-        <fieldset className="m-0 mt-10 min-w-0 max-w-4xl border-0 p-0">
-          <legend className="label mb-7 block w-full p-0 text-chalk">Tus datos</legend>
-          <div className="grid gap-7 sm:grid-cols-2">
+        <fieldset className="m-0 mt-10 min-w-0 border-0 p-0">
+          <legend className="label block w-full p-0 text-chalk">Tus datos</legend>
+          <p className="mb-7 mt-2 text-sm text-chalk-2">
+            La confirmación te llega por mail. El teléfono es por si hay que avisarte algo.
+          </p>
+          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
             <Field id="name" label="Nombre" required error={errors.name}>
               <input
                 id="name"
@@ -687,6 +717,25 @@ export default function Booking({ selectedService }) {
                 className={fieldClass('name')}
                 value={draft.name}
                 onChange={update('name')}
+              />
+            </Field>
+
+            <Field id="email" label="Mail" required error={errors.email}>
+              <input
+                id="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={120}
+                required
+                placeholder="nombre@correo.com"
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? 'email-error' : undefined}
+                className={fieldClass('email')}
+                value={draft.email}
+                onChange={update('email')}
               />
             </Field>
 
@@ -706,7 +755,7 @@ export default function Booking({ selectedService }) {
               />
             </Field>
 
-            <Field id="notes" label="Algo que debamos saber (opcional)" className="sm:col-span-2">
+            <Field id="notes" label="Algo que debamos saber (opcional)" className="sm:col-span-2 lg:col-span-3">
               <textarea
                 id="notes"
                 rows="3"
@@ -733,8 +782,8 @@ export default function Booking({ selectedService }) {
             {service.name} con {member?.name}, {formatLongDate(draft.date)} a las {draft.time}.
           </p>
           <p className="mt-3 text-sm leading-relaxed">
-            Es una demo, así que no se envía a ningún lado de verdad: en un sitio real esto abriría
-            WhatsApp con el turno ya redactado.
+            Te mandamos la confirmación a <span className="font-mono">{draft.email.trim()}</span>. Si
+            no la ves en unos minutos, revisá la carpeta de spam.
           </p>
         </div>
         <Button type="button" variant="ghost" className="mt-8" onClick={startOver}>
@@ -752,8 +801,8 @@ export default function Booking({ selectedService }) {
       <div className="shell pb-16 pt-24 md:pt-32">
         <SectionHeading
           title="Sacá tu turno"
-          meta="Confirmamos por WhatsApp"
-          subtitle="Servicio, barbero, día y hora. Elegís sobre los horarios libres y te confirmamos por WhatsApp."
+          meta="Confirmación por mail"
+          subtitle="Servicio, barbero, día y hora. Elegís sobre los horarios libres y te llega la confirmación por mail."
           className="max-w-4xl"
         />
       </div>
@@ -847,6 +896,7 @@ export default function Booking({ selectedService }) {
 
                 <div className="ml-auto flex flex-col items-end gap-3 text-right">
                   <p aria-live="polite" className="min-h-6">
+                    {step === 3 && submitError && <Notice>{submitError}</Notice>}
                     {step < 3 && !ready[step] && (
                       blocked ? (
                         <Notice id="turno-falta">{hints[step]}</Notice>
@@ -902,8 +952,8 @@ export default function Booking({ selectedService }) {
                   </p>
                 )}
                 <p className="mt-3 max-w-sm text-sm leading-relaxed text-chalk-2">
-                  Confirmamos por WhatsApp el mismo día. Si no podés venir, avisanos y reprogramamos
-                  sin cargo.
+                  Te llega la confirmación por mail. Si no podés venir, avisanos y reprogramamos sin
+                  cargo.
                 </p>
               </div>
             )}
